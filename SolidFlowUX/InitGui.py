@@ -4,12 +4,17 @@
 IMPORTANT
 ---------
 The plain ``S`` key is intentionally owned only by ``solidflow_ui``'s event
-filter.  Do not add a second Qt QAction/FreeCAD accelerator for ``S`` here:
+filter. Do not add a second Qt QAction/FreeCAD accelerator for ``S`` here:
 having two independent shortcut mechanisms can prevent the contextual palette
 from receiving the key event.
 
-This bootstrap keeps the proven beta.3 UI layer intact and loads beta.4 as an
-additive layer.
+Load order:
+1. proven beta.3 base UI/palette/event-filter;
+2. beta.4 Smart Sketch / Quick Constraints;
+3. beta.5 Fillet Doctor / Revolution+ / Studio Shadows.
+
+Every newer layer is additive: a failure in an experimental layer must not
+prevent the stable ``S`` palette from loading.
 """
 
 import FreeCAD as App
@@ -35,7 +40,7 @@ _BASE_UI = _load_base_ui()
 
 
 class _ShowShortcutBar:
-    """Menu/toolbar command only.  No keyboard accelerator on purpose."""
+    """Menu/toolbar command only. No keyboard accelerator on purpose."""
 
     def GetResources(self):
         return {
@@ -72,7 +77,6 @@ class _ToggleShortcut:
     def Activated(self):
         if _BASE_UI is None:
             return
-        # Prefer the beta.3 implementation when exposed by solidflow_ui.
         for name in ("toggle_shortcut", "toggle_s_shortcut", "toggle_shortcut_enabled"):
             fn = getattr(_BASE_UI, name, None)
             if callable(fn):
@@ -93,15 +97,18 @@ try:
     Gui.addCommand("SolidFlow_ShowShortcutBar", _ShowShortcutBar())
     Gui.addCommand("SolidFlow_ToggleShortcut", _ToggleShortcut())
 except Exception as exc:
-    # The base layer can already have registered these IDs.  That is harmless;
-    # the important part is that no second 'S' accelerator is installed here.
     App.Console.PrintWarning("SolidFlow: registrazione comandi GUI: %s\n" % exc)
 
 
-# Beta.4 is strictly additive.  A beta.4 failure must not prevent the stable
-# palette/event-filter from loading.
 try:
     import solidflow_beta4
     solidflow_beta4.install()
 except Exception as exc:
     App.Console.PrintError("SolidFlow beta.4 install: %s\n" % exc)
+
+
+try:
+    import solidflow_beta5
+    solidflow_beta5.install()
+except Exception as exc:
+    App.Console.PrintError("SolidFlow beta.5 install: %s\n" % exc)
