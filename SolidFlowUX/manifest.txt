@@ -4,3 +4,6 @@ InitGui.py
 solidflow_beta4.py
 solidflow_beta5.py
 solidflow_beta6.py
+solidflow_mesh.py
+solidflow_appearance.py
+solidflow_beta7.py
