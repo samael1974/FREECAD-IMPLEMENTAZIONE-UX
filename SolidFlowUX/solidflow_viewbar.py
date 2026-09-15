@@ -20,8 +20,6 @@ def set_display_bar_enabled(enabled):
     _prefs().SetBool("DisplayStyleBar", bool(enabled))
 
 
-
-
 def _home_view():
     """SolidFlow Home: Shift keeps orientation; normal click returns to axonometric and fits all."""
     try:
@@ -63,7 +61,30 @@ def _run_draw_style(index, fallback_name=None):
     return False
 
 
+def _toggle_shadows():
+    try:
+        import solidflow_beta5
+        solidflow_beta5._studio.toggle()
+        return
+    except Exception as exc:
+        App.Console.PrintWarning("SolidFlow Ombre: %s\n" % exc)
+    try:
+        QtWidgets.QMessageBox.information(
+            Gui.getMainWindow(), "SolidFlow - Ombre",
+            "Il layer Ombre non è caricato. Apri SolidFlow > Diagnostica SolidFlow per verificare i moduli.",
+        )
+    except Exception:
+        pass
+
+
 def _material_editor():
+    # Prefer the SolidFlow appearance/material editor; keep native FreeCAD as fallback.
+    try:
+        import solidflow_appearance
+        solidflow_appearance.launch_appearance_studio()
+        return
+    except Exception:
+        pass
     try:
         cmd = Gui.Command.get("Std_SetMaterial")
         if cmd:
@@ -146,15 +167,16 @@ class DisplayStyleBar(QtWidgets.QFrame):
             ("Solido", "Solido ombreggiato", lambda: _run_draw_style(5, "Shaded")),
             ("Bordi", "Solido con bordi / Flat Lines", lambda: _run_draw_style(6, "Flat Lines")),
             ("Nascoste", "Linee nascoste", lambda: _run_draw_style(3, "Hidden Line")),
+            ("Ombre", "Piano di appoggio e ombra di contatto SolidFlow", _toggle_shadows),
             ("Render", "Vista ombreggiata prospettica (viewport, non ray tracing)", _render_view),
-            ("Materiale", "Apri il materiale dell'oggetto selezionato", _material_editor),
+            ("Materiale", "Appearance Studio: materiale, colore e texture", _material_editor),
         ]
         for i, (text, tip, callback) in enumerate(specs):
             b = QtWidgets.QToolButton(self)
             b.setText(text)
             b.setToolTip(tip)
             b.clicked.connect(lambda _checked=False, cb=callback: cb())
-            grid.addWidget(b, i // 3, i % 3)
+            grid.addWidget(b, i // 4, i % 4)
         self.adjustSize()
         self.hide()
 
@@ -179,7 +201,6 @@ class DisplayStyleBar(QtWidgets.QFrame):
             self.setWindowFlags(QtCore.Qt.Widget)
             self.show()
         self.adjustSize()
-        # Navigation cube occupies the top-right corner. Keep a compact margin below it.
         x = max(4, host.width() - self.width() - 18)
         y = min(max(132, 8), max(8, host.height() - self.height() - 8))
         self.move(x, y)
