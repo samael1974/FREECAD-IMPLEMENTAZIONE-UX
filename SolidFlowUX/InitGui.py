@@ -8,7 +8,8 @@ Load order:
 1. stable base UI/palette/event-filter;
 2. beta.4 Smart Sketch / Quick Constraints;
 3. beta.5 Fillet Doctor / Revolution+ / Studio Shadows;
-4. beta.6 Sweep / Loft / Helix / Thread Wizard.
+4. beta.6 Sweep / Loft / Helix / Thread Wizard;
+5. beta.7 Mesh Doctor / Appearance Studio / palette integration.
 
 Every newer layer is additive: a failure in an experimental layer must not
 prevent the stable ``S`` palette from loading.
@@ -144,6 +145,7 @@ except Exception:
 
 _load_layer("solidflow_beta5")
 _load_layer("solidflow_beta6")
+_load_layer("solidflow_beta7")
 
 App.Console.PrintMessage(
     "SolidFlow bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
