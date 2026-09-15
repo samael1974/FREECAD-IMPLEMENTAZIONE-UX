@@ -47,14 +47,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop'; Invoke-WebRequest -UseBasicParsing '%BASE%/manifest.txt' -OutFile '%TMP%\manifest.txt'"
 if errorlevel 1 goto :download_error
 
-findstr /R /V /B /C:"[ ]*$" /C:"#" "%TMP%\manifest.txt" > "%TMP%\files.txt"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop'; $m=Get-Content '%TMP%\manifest.txt' ^| ForEach-Object {$_.Trim()} ^| Where-Object {$_ -and -not $_.StartsWith('#')}; if(-not $m){throw 'Manifest vuoto'}; $m ^| Set-Content -Encoding ASCII '%TMP%\files.txt'"
 if errorlevel 1 goto :validation_error
 
 echo [2/6] Scarico i moduli richiesti dal manifest...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ErrorActionPreference='Stop';" ^
   "$base='%BASE%'; $tmp='%TMP%';" ^
-  "$files=Get-Content ($tmp+'\files.txt') ^| ForEach-Object {$_.Trim()} ^| Where-Object {$_ -and -not $_.StartsWith('#')};" ^
+  "$files=Get-Content ($tmp+'\files.txt') ^| ForEach-Object {$_.Trim()} ^| Where-Object {$_};" ^
   "foreach($f in $files){ if($f.Contains('..') -or $f.Contains('/') -or $f.Contains('\')){throw 'Nome file non valido nel manifest: '+$f}; Invoke-WebRequest -UseBasicParsing ($base+'/'+$f) -OutFile ($tmp+'\'+$f) }"
 if errorlevel 1 goto :download_error
 
@@ -114,14 +115,14 @@ echo Backup automatico:
 echo %BACKUP%
 echo.
 echo Da ora questo stesso UPDATE_SOLIDFLOW.bat puo' essere riutilizzato
- echo per le versioni successive: legge automaticamente il manifest GitHub.
+echo per le versioni successive: legge automaticamente il manifest GitHub.
 echo.
 echo Avvia FreeCAD e verifica:
 echo   1. tasto S
 echo   2. menu SolidFlow ^> Fillet Doctor...
 echo   3. menu SolidFlow ^> Rivoluzione+...
 echo   4. pulsante Ombre vicino agli stili di visualizzazione
- echo.
+echo.
 pause
 exit /b 0
 
@@ -152,6 +153,6 @@ goto :fail
 
 :fail
 if exist "%TMP%" rmdir /S /Q "%TMP%" >nul 2>&1
-<con: echo.
+echo.
 pause
 exit /b 1
