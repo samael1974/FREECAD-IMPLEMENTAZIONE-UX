@@ -1,0 +1,5 @@
+# SolidFlow rolling update manifest
+# One repository-relative file name per line. Blank lines and # comments ignored.
+InitGui.py
+solidflow_beta4.py
+solidflow_beta5.py
