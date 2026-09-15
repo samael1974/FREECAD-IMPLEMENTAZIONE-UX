@@ -1,0 +1,75 @@
+name: Build SolidFlow Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify complete SolidFlow source tree
+        shell: pwsh
+        run: |
+          $required = @(
+            'SolidFlowUX/Init.py',
+            'SolidFlowUX/InitGui.py',
+            'SolidFlowUX/solidflow_ui.py',
+            'SolidFlowUX/solidflow_features.py',
+            'SolidFlowUX/solidflow_import.py',
+            'SolidFlowUX/solidflow_smart.py',
+            'SolidFlowUX/solidflow_viewbar.py',
+            'SolidFlowUX/solidflow_beta4.py',
+            'SolidFlowUX/solidflow_beta5.py',
+            'SolidFlowUX/solidflow_beta6.py',
+            'SolidFlowUX/solidflow_mesh.py',
+            'SolidFlowUX/solidflow_appearance.py',
+            'SolidFlowUX/solidflow_beta7.py',
+            'SolidFlowUX/solidflow_patterns.py'
+          )
+          $missing = $required | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Error ('Installer source tree incomplete. Missing: ' + ($missing -join ', '))
+            exit 1
+          }
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Python syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem SolidFlowUX -Filter *.py | ForEach-Object {
+            python -m py_compile $_.FullName
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            throw 'Inno Setup compiler not found.'
+          }
+          & $iscc 'installer\SolidFlowUX.iss'
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SolidFlowUX-Windows-Installer
+          path: dist/*.exe
+          if-no-files-found: error
