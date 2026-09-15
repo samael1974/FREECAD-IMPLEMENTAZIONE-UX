@@ -107,6 +107,17 @@ except Exception as exc:
     App.Console.PrintError("SolidFlow beta.4 install: %s\n" % exc)
 
 
+# Qt6/PySide6 moved QActionGroup from QtWidgets to QtGui.  FreeCAD's PySide
+# compatibility layer varies by build, so provide the old location expected by
+# the beta.5 UI when it is missing.
+try:
+    from PySide import QtGui, QtWidgets
+    if not hasattr(QtWidgets, "QActionGroup") and hasattr(QtGui, "QActionGroup"):
+        QtWidgets.QActionGroup = QtGui.QActionGroup
+except Exception:
+    pass
+
+
 try:
     import solidflow_beta5
     solidflow_beta5.install()
