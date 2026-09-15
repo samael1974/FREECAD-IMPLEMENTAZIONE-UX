@@ -5,12 +5,13 @@ The plain ``S`` key is intentionally owned only by ``solidflow_ui``'s event
 filter. Do not add a second QAction/FreeCAD accelerator for ``S`` here.
 
 Load order:
-1. stable base UI/palette/event-filter;
+1. consolidated base UI/palette/event-filter;
 2. beta.4 Smart Sketch / Quick Constraints;
 3. beta.5 Fillet Doctor / Revolution+ / Studio Shadows;
 4. beta.6 Sweep / Loft / Helix / Thread Wizard;
 5. beta.7 Mesh Doctor / Appearance Studio / palette integration;
-6. beta.8 pattern integration: Sketch X/Y + polar, PartDesign 3D patterns.
+6. beta.8 pattern integration;
+7. beta.9 stabilization and diagnostics.
 
 Every newer layer is additive: a failure in an experimental layer must not
 prevent the stable ``S`` palette from loading.
@@ -118,8 +119,8 @@ class _ToggleShortcut:
                 except Exception:
                     pass
         params = App.ParamGet("User parameter:BaseApp/Preferences/Mod/SolidFlowUX")
-        current = params.GetBool("UseSShortcut", True)
-        params.SetBool("UseSShortcut", not current)
+        current = params.GetBool("EnableSShortcut", True)
+        params.SetBool("EnableSShortcut", not current)
         App.Console.PrintMessage(
             "SolidFlow: tasto S %s.\n" % ("attivo" if not current else "disattivato")
         )
@@ -148,6 +149,7 @@ _load_layer("solidflow_beta5")
 _load_layer("solidflow_beta6")
 _load_layer("solidflow_beta7")
 _load_layer("solidflow_patterns")
+_load_layer("solidflow_beta9")
 
 App.Console.PrintMessage(
     "SolidFlow bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
