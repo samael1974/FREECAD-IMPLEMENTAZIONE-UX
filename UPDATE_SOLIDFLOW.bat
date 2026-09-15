@@ -5,6 +5,7 @@ chcp 65001 >nul
 title SolidFlow UX - Aggiornatore automatico
 
 set "TARGET=%APPDATA%\FreeCAD\v1-1\Mod\SolidFlowUX"
+set "LEGACY=%APPDATA%\FreeCAD\Mod\SolidFlowUX"
 set "BASE=https://raw.githubusercontent.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX/main/SolidFlowUX"
 set "TMP=%TEMP%\SolidFlowUX_Rolling_Update"
 
@@ -23,6 +24,14 @@ if not exist "%TARGET%\solidflow_ui.py" (
     echo.
     pause
     exit /b 10
+)
+
+if exist "%LEGACY%" (
+    echo [AVVISO] Esiste anche la vecchia cartella non versionata:
+    echo %LEGACY%
+    echo SolidFlow usera' come destinazione SOLO la cartella v1-1 indicata sopra.
+    echo Se la copia legacy non serve piu', potrai archiviarla dopo i test.
+    echo.
 )
 
 tasklist /FI "IMAGENAME eq FreeCAD.exe" 2>nul | find /I "FreeCAD.exe" >nul
@@ -59,11 +68,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "foreach($f in $files){ if($f.Contains('..') -or $f.Contains('/') -or $f.Contains('\')){throw 'Nome file non valido nel manifest: '+$f}; Invoke-WebRequest -UseBasicParsing ($base+'/'+$f) -OutFile ($tmp+'\'+$f) }"
 if errorlevel 1 goto :download_error
 
-rem Identity checks for the essential bootstrap/layers.
-findstr /C:"plain ``S`` key is intentionally owned only" "%TMP%\InitGui.py" >nul || goto :validation_error
-findstr /C:"VERSION = \"0.4.0-beta.4\"" "%TMP%\solidflow_beta4.py" >nul || goto :validation_error
-findstr /C:"VERSION = \"0.4.0-beta.5\"" "%TMP%\solidflow_beta5.py" >nul || goto :validation_error
-findstr /C:"solidflow_beta5.install()" "%TMP%\InitGui.py" >nul || goto :validation_error
+rem Validate the bootstrap and every beta layer listed by the manifest.
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop'; $tmp='%TMP%';" ^
+  "$init=Get-Content -Raw ($tmp+'\InitGui.py');" ^
+  "if(-not $init.Contains('plain ``S`` key is intentionally owned only')){throw 'Bootstrap SolidFlow non riconosciuto'};" ^
+  "$files=Get-Content ($tmp+'\files.txt') ^| ForEach-Object {$_.Trim()} ^| Where-Object {$_};" ^
+  "foreach($f in $files){ if($f -like 'solidflow_beta*.py'){ $text=Get-Content -Raw ($tmp+'\'+$f); if(-not $text.Contains('VERSION =')){throw 'Versione mancante in '+$f}; $module=[IO.Path]::GetFileNameWithoutExtension($f); $needle='_load_layer(\"'+$module+'\")'; if(-not $init.Contains($needle)){throw 'InitGui non carica '+$module} } }"
+if errorlevel 1 goto :validation_error
 
 echo [3/6] Controllo la sintassi Python...
 set "FCPY=%ProgramFiles%\FreeCAD 1.1\bin\python.exe"
@@ -101,8 +113,11 @@ copy /Y "%TMP%\manifest.txt" "%TARGET%\manifest.txt" >nul
 if exist "%TARGET%\__pycache__" rmdir /S /Q "%TARGET%\__pycache__" >nul 2>&1
 
 echo [6/6] Verifica finale...
-findstr /C:"VERSION = \"0.4.0-beta.5\"" "%TARGET%\solidflow_beta5.py" >nul || goto :install_error
-findstr /C:"solidflow_beta5.install()" "%TARGET%\InitGui.py" >nul || goto :install_error
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop'; $target='%TARGET%';" ^
+  "$init=Get-Content -Raw ($target+'\InitGui.py'); $files=Get-Content ($target+'\manifest.txt') ^| ForEach-Object {$_.Trim()} ^| Where-Object {$_ -and -not $_.StartsWith('#')};" ^
+  "foreach($f in $files){ if(-not (Test-Path ($target+'\'+$f))){throw 'File installato mancante: '+$f}; if($f -like 'solidflow_beta*.py'){ $module=[IO.Path]::GetFileNameWithoutExtension($f); if(-not $init.Contains('_load_layer(\"'+$module+'\")')){throw 'Layer non registrato: '+$module} } }"
+if errorlevel 1 goto :install_error
 
 rmdir /S /Q "%TMP%" >nul 2>&1
 
@@ -114,14 +129,14 @@ echo.
 echo Backup automatico:
 echo %BACKUP%
 echo.
-echo Da ora questo stesso UPDATE_SOLIDFLOW.bat puo' essere riutilizzato
-echo per le versioni successive: legge automaticamente il manifest GitHub.
+echo Questo stesso UPDATE_SOLIDFLOW.bat e' pensato per essere riutilizzato:
+echo legge automaticamente il manifest GitHub e valida i layer elencati.
 echo.
-echo Avvia FreeCAD e verifica:
+echo Avvia FreeCAD e verifica per primi:
 echo   1. tasto S
-echo   2. menu SolidFlow ^> Fillet Doctor...
-echo   3. menu SolidFlow ^> Rivoluzione+...
-echo   4. pulsante Ombre vicino agli stili di visualizzazione
+echo   2. SolidFlow ^> Feature avanzate ^> Sweep / Loft / Elica
+echo   3. Thread Wizard su una faccia cilindrica con asse Z
+echo   4. SolidFlow ^> Fillet Doctor... sul problema del raccordo
 echo.
 pause
 exit /b 0
