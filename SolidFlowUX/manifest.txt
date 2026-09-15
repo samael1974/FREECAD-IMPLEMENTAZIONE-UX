@@ -1,6 +1,12 @@
 # SolidFlow rolling update manifest
-# One repository-relative file name per line. Blank lines and # comments ignored.
+# Complete installation: base core first, then additive layers.
+Init.py
 InitGui.py
+solidflow_ui.py
+solidflow_features.py
+solidflow_smart.py
+solidflow_import.py
+solidflow_viewbar.py
 solidflow_beta4.py
 solidflow_beta5.py
 solidflow_beta6.py
