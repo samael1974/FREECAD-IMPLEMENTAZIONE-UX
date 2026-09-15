@@ -3,3 +3,4 @@
 InitGui.py
 solidflow_beta4.py
 solidflow_beta5.py
+solidflow_beta6.py
