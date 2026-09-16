@@ -1,11 +1,24 @@
 # -*- coding: utf-8 -*-
-"""SolidFlow smart Sketcher helpers: snap tuning and context-aware constraint suggestions."""
+"""SolidFlow Smart Sketch core.
+
+One shared engine for:
+- native FreeCAD AutoConstraint tuning;
+- selection classification while a Sketch is edited;
+- 3-5 ranked constraint/dimension suggestions;
+- automatic dimension-type recognition (the user always confirms by clicking).
+
+The engine never creates a constraint on its own.  It only ranks native
+Sketcher commands; FreeCAD remains the solver and source of truth.
+"""
+from __future__ import annotations
+
 import math
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
+VERSION = "0.4.0-beta.10-smart"
 PREF_PATH = "User parameter:BaseApp/Preferences/Mod/SolidFlowUX"
 SKETCH_GENERAL_PATH = "User parameter:BaseApp/Preferences/Mod/Sketcher/General"
 
@@ -50,8 +63,47 @@ def set_smart_snap_delay(value):
         _sketch_general().SetInt("DragAutoConstraintDelay", value)
 
 
+def active_sketch():
+    try:
+        if not Gui.ActiveDocument:
+            return None
+        edited = Gui.ActiveDocument.getInEdit()
+        if edited is None:
+            return None
+        obj = getattr(edited, "Object", None)
+        if obj is not None:
+            return obj
+        if hasattr(edited, "isDerivedFrom") and edited.isDerivedFrom("SketcherGui::ViewProviderSketch"):
+            return edited.Object
+    except Exception:
+        pass
+    return None
+
+
+def ensure_current_sketch_autoconstraints():
+    if not smart_snap_enabled():
+        return False
+    try:
+        if not Gui.ActiveDocument:
+            return False
+        vp = Gui.ActiveDocument.getInEdit()
+        if vp is None:
+            return False
+        if hasattr(vp, "Autoconstraints"):
+            vp.Autoconstraints = True
+            return True
+        obj = getattr(vp, "Object", None)
+        view = getattr(obj, "ViewObject", None) if obj else None
+        if view is not None and hasattr(view, "Autoconstraints"):
+            view.Autoconstraints = True
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def apply_smart_snap_preferences():
-    """Use FreeCAD's own auto-constraint engine, tuned for a quicker response."""
+    """Tune FreeCAD's native AutoConstraint engine, without replacing it."""
     if not smart_snap_enabled():
         return
     grp = _sketch_general()
@@ -72,101 +124,73 @@ def restore_native_snap_delay():
         )
 
 
-def ensure_current_sketch_autoconstraints():
-    """Turn on Sketcher's native auto-constraint flag for the sketch currently in edit mode."""
-    if not smart_snap_enabled():
-        return False
+def _command_exists(name):
     try:
-        if not Gui.ActiveDocument:
-            return False
-        vp = Gui.ActiveDocument.getInEdit()
-        if vp is None:
-            return False
-        if hasattr(vp, "Autoconstraints"):
-            try:
-                vp.Autoconstraints = True
-                return True
-            except Exception:
-                pass
-        # Some builds expose it through the ViewObject returned by the edited object.
-        obj = getattr(vp, "Object", None)
-        view = getattr(obj, "ViewObject", None) if obj else None
-        if view is not None and hasattr(view, "Autoconstraints"):
-            view.Autoconstraints = True
-            return True
-    except Exception:
-        pass
-    return False
-
-
-def _command_available(name):
-    try:
-        cmd = Gui.Command.get(name)
-        if not cmd:
-            return False
-        actions = cmd.getAction()
-        if not actions:
-            return True
-        return bool(actions[0].isEnabled())
+        return bool(name and Gui.Command.get(name))
     except Exception:
         return False
 
 
-def _selection_ex():
-    try:
-        return Gui.Selection.getSelectionEx()
-    except Exception:
-        return []
-
-
-def _single_selected_sketch_item():
-    sel = _selection_ex()
-    if len(sel) != 1:
-        return None
-    item = sel[0]
-    obj = getattr(item, "Object", None)
-    if obj is None:
-        return None
-    try:
-        if not obj.isDerivedFrom("Sketcher::SketchObject"):
-            return None
-    except Exception:
-        if getattr(obj, "TypeId", "") != "Sketcher::SketchObject":
-            return None
-    return item
-
-
-def selected_geometry_info():
-    """Best-effort geometry descriptors for selected Sketch edges.
-
-    We deliberately use this only to *rank suggestions*. The actual constraint is always
-    executed by FreeCAD's native command on the real selection, so a descriptor mismatch
-    cannot directly create an invalid constraint.
-    """
-    item = _single_selected_sketch_item()
-    if item is None:
-        return None, []
-    sketch = item.Object
-    names = [str(n) for n in (getattr(item, "SubElementNames", []) or []) if str(n).startswith("Edge")]
-    result = []
+def _first_command(*names):
     for name in names:
-        try:
-            idx = int(name[4:]) - 1
-        except Exception:
-            continue
-        geo = None
-        try:
-            if 0 <= idx < len(sketch.Geometry):
-                geo = sketch.Geometry[idx]
-        except Exception:
-            geo = None
-        result.append((name, idx, geo))
-    return sketch, result
+        if _command_exists(name):
+            return name
+    return None
+
+
+COMMANDS = {
+    "coincident": _first_command("Sketcher_ConstrainCoincidentUnified", "Sketcher_ConstrainCoincident"),
+    "point_on": _first_command("Sketcher_ConstrainPointOnObject"),
+    "horizontal": _first_command("Sketcher_ConstrainHorizontal"),
+    "vertical": _first_command("Sketcher_ConstrainVertical"),
+    "horver": _first_command("Sketcher_ConstrainHorVer"),
+    "parallel": _first_command("Sketcher_ConstrainParallel"),
+    "perpendicular": _first_command("Sketcher_ConstrainPerpendicular"),
+    "tangent": _first_command("Sketcher_ConstrainTangent"),
+    "equal": _first_command("Sketcher_ConstrainEqual"),
+    "symmetric": _first_command("Sketcher_ConstrainSymmetric"),
+    "distance": _first_command("Sketcher_ConstrainDistance"),
+    "distance_x": _first_command("Sketcher_ConstrainDistanceX"),
+    "distance_y": _first_command("Sketcher_ConstrainDistanceY"),
+    "radius": _first_command("Sketcher_ConstrainRadius"),
+    "diameter": _first_command("Sketcher_ConstrainDiameter"),
+    "angle": _first_command("Sketcher_ConstrainAngle"),
+    "lock": _first_command("Sketcher_ConstrainLock"),
+}
+
+
+def all_constraint_actions():
+    """Ordered list used by the 'Altri…' menu."""
+    rows = [
+        ("Coincidente / Concentrico", "coincident"),
+        ("Punto su oggetto", "point_on"),
+        ("Orizzontale / Verticale auto", "horver"),
+        ("Orizzontale", "horizontal"),
+        ("Verticale", "vertical"),
+        ("Parallelo", "parallel"),
+        ("Perpendicolare", "perpendicular"),
+        ("Tangente", "tangent"),
+        ("Uguale", "equal"),
+        ("Simmetria", "symmetric"),
+        ("Lunghezza / distanza", "distance"),
+        ("Quota X", "distance_x"),
+        ("Quota Y", "distance_y"),
+        ("Raggio", "radius"),
+        ("Diametro", "diameter"),
+        ("Angolo", "angle"),
+        ("Blocca", "lock"),
+    ]
+    out = []
+    for label, key in rows:
+        cmd = COMMANDS.get(key)
+        if cmd:
+            out.append((label, cmd))
+    return out
 
 
 def _vec2(point):
     try:
-        return float(point.x), float(point.y)
+        return (float(point.x), float(point.y))
     except Exception:
         return None
 
@@ -201,98 +225,219 @@ def _circle_data(geo):
         return None
 
 
+def _subobject_geometry(sub):
+    if sub is None:
+        return None
+    try:
+        return sub.Curve
+    except Exception:
+        return None
+
+
+def selected_geometry_info():
+    """Return ``(sketch, descriptors)`` for the current Sketch selection.
+
+    Each descriptor is a dict with name/kind/geometry/source.  Internal sketch
+    geometry is read from ``Sketch.Geometry`` when possible; external edges use
+    the selected TopoShape curve.  This lets SolidFlow recognise circles/holes
+    projected from the supporting solid as well as normal sketch geometry.
+    """
+    sketch = active_sketch()
+    if sketch is None:
+        return None, []
+
+    descriptors = []
+    try:
+        selection = Gui.Selection.getSelectionEx()
+    except Exception:
+        selection = []
+
+    for item in selection:
+        if getattr(item, "Object", None) is not sketch:
+            continue
+        names = list(getattr(item, "SubElementNames", []) or [])
+        subs = list(getattr(item, "SubObjects", []) or [])
+        for i, raw_name in enumerate(names):
+            name = str(raw_name)
+            sub = subs[i] if i < len(subs) else None
+            lower = name.lower()
+            if lower.startswith("vertex"):
+                descriptors.append({"name": name, "kind": "vertex", "geo": None, "source": "point"})
+                continue
+            if not (lower.startswith("edge") or lower.startswith("externaledge")):
+                continue
+
+            geo = None
+            source = "external" if lower.startswith("externaledge") else "internal"
+            if source == "internal":
+                try:
+                    idx = int(name[4:]) - 1
+                    if 0 <= idx < len(sketch.Geometry):
+                        geo = sketch.Geometry[idx]
+                except Exception:
+                    geo = None
+            if geo is None:
+                geo = _subobject_geometry(sub)
+                if source == "internal" and geo is not None:
+                    # EdgeN beyond the internal geometry count is usually an
+                    # external/reference edge exposed by the ViewProvider.
+                    source = "external"
+
+            line = _line_data(geo)
+            circ = _circle_data(geo)
+            if line:
+                kind = "line"
+            elif circ:
+                kind = "circle"
+            elif geo is not None:
+                kind = "curve"
+            else:
+                kind = "edge"
+            descriptors.append({"name": name, "kind": kind, "geo": geo, "source": source})
+    return sketch, descriptors
+
+
+def sketch_selection_count():
+    _sketch, items = selected_geometry_info()
+    return len(items)
+
+
 def _distance(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
-def _suggest(label, command, reason, score):
-    if not _command_available(command):
+def _suggest(label, key, reason, score, kind="constraint"):
+    command = COMMANDS.get(key)
+    if not command:
         return None
     return {
         "label": label,
         "command": command,
         "reason": reason,
         "score": float(score),
+        "kind": kind,
     }
 
 
 def constraint_suggestions(limit=5):
-    """Return context-aware Sketcher constraint suggestions, highest confidence first."""
-    sketch, geos = selected_geometry_info()
-    if sketch is None or not geos:
+    """Rank the most probable native constraints/dimensions.
+
+    No suggestion is applied automatically.  The user confirms by clicking a
+    button in the mini-window or S palette.
+    """
+    if not constraint_hints_enabled():
+        return []
+    _sketch, items = selected_geometry_info()
+    if not items:
         return []
 
     suggestions = []
-    if len(geos) == 1:
-        geo = geos[0][2]
-        line = _line_data(geo)
-        circ = _circle_data(geo)
+    n = len(items)
+    kinds = [x["kind"] for x in items]
+
+    if n == 1:
+        item = items[0]
+        line = _line_data(item["geo"])
+        circle = _circle_data(item["geo"])
         if line:
             ratio_h = abs(line["dy"]) / max(line["length"], 1e-9)
             ratio_v = abs(line["dx"]) / max(line["length"], 1e-9)
-            if ratio_h < 0.12:
-                suggestions.append(_suggest("Orizzontale", "Sketcher_ConstrainHorizontal", "La linea è quasi orizzontale", 100 - ratio_h * 100))
-            if ratio_v < 0.12:
-                suggestions.append(_suggest("Verticale", "Sketcher_ConstrainVertical", "La linea è quasi verticale", 100 - ratio_v * 100))
-            suggestions.append(_suggest("Lunghezza", "Sketcher_ConstrainDistance", "Quota la lunghezza della linea", 45))
-            suggestions.append(_suggest("Blocca", "Sketcher_ConstrainLock", "Blocca la geometria selezionata", 15))
-        elif circ:
-            suggestions.append(_suggest("Diametro", "Sketcher_ConstrainDiameter", "Quota il diametro", 65))
-            suggestions.append(_suggest("Raggio", "Sketcher_ConstrainRadius", "Quota il raggio", 55))
-            suggestions.append(_suggest("Blocca", "Sketcher_ConstrainLock", "Blocca la geometria selezionata", 15))
-        else:
-            suggestions.append(_suggest("Quota", "Sketcher_ConstrainDistance", "Aggiungi una quota", 30))
+            if ratio_h < 0.15:
+                suggestions.append(_suggest("Orizzontale", "horizontal", "Linea quasi orizzontale", 100 - ratio_h * 100))
+                suggestions.append(_suggest("Quota X", "distance_x", "Quota automaticamente la proiezione X", 82, "dimension"))
+            elif ratio_v < 0.15:
+                suggestions.append(_suggest("Verticale", "vertical", "Linea quasi verticale", 100 - ratio_v * 100))
+                suggestions.append(_suggest("Quota Y", "distance_y", "Quota automaticamente la proiezione Y", 82, "dimension"))
+            else:
+                suggestions.append(_suggest("Lunghezza", "distance", "Quota automaticamente la lunghezza", 92, "dimension"))
+                suggestions.append(_suggest("Quota X", "distance_x", "Quota la proiezione X", 55, "dimension"))
+                suggestions.append(_suggest("Quota Y", "distance_y", "Quota la proiezione Y", 54, "dimension"))
+            suggestions.append(_suggest("Lunghezza", "distance", "Quota la lunghezza della linea", 78, "dimension"))
+        elif circle:
+            suggestions.append(_suggest("Diametro", "diameter", "Quota automatica più comune per cerchi/fori", 100, "dimension"))
+            suggestions.append(_suggest("Raggio", "radius", "Quota il raggio", 88, "dimension"))
+        elif item["kind"] == "vertex":
+            suggestions.append(_suggest("Quota X", "distance_x", "Posizione X del punto", 96, "dimension"))
+            suggestions.append(_suggest("Quota Y", "distance_y", "Posizione Y del punto", 95, "dimension"))
 
-    elif len(geos) == 2:
-        g1, g2 = geos[0][2], geos[1][2]
-        l1, l2 = _line_data(g1), _line_data(g2)
-        c1, c2 = _circle_data(g1), _circle_data(g2)
+    elif n == 2:
+        a, b = items
+        l1, l2 = _line_data(a["geo"]), _line_data(b["geo"])
+        c1, c2 = _circle_data(a["geo"]), _circle_data(b["geo"])
+        pair = set(kinds)
+
         if l1 and l2:
             u1 = (l1["dx"] / l1["length"], l1["dy"] / l1["length"])
             u2 = (l2["dx"] / l2["length"], l2["dy"] / l2["length"])
             dot = abs(u1[0] * u2[0] + u1[1] * u2[1])
             cross = abs(u1[0] * u2[1] - u1[1] * u2[0])
-            if cross < math.sin(math.radians(10)):
-                suggestions.append(_suggest("Parallelo", "Sketcher_ConstrainParallel", "Le linee sono quasi parallele", 100 - cross * 100))
-            if dot < math.sin(math.radians(10)):
-                suggestions.append(_suggest("Perpendicolare", "Sketcher_ConstrainPerpendicular", "Le linee sono quasi a 90°", 100 - dot * 100))
             rel = abs(l1["length"] - l2["length"]) / max((l1["length"] + l2["length"]) * 0.5, 1e-9)
-            if rel < 0.12:
-                suggestions.append(_suggest("Uguale", "Sketcher_ConstrainEqual", "Le linee hanno lunghezze molto simili", 90 - rel * 100))
-            endpoints1 = (l1["a"], l1["b"])
-            endpoints2 = (l2["a"], l2["b"])
-            near = min(_distance(a, b) for a in endpoints1 for b in endpoints2)
+            near = min(_distance(p, q) for p in (l1["a"], l1["b"]) for q in (l2["a"], l2["b"]))
             scale = max(l1["length"], l2["length"], 1e-9)
-            if near / scale < 0.08:
-                suggestions.append(_suggest("Coincidente", "Sketcher_ConstrainCoincident", "Due estremità sono molto vicine", 92 - (near / scale) * 100))
-            # Keep common relations available even when geometry is not already almost there.
-            suggestions.append(_suggest("Parallelo", "Sketcher_ConstrainParallel", "Rendi parallele le linee", 25))
-            suggestions.append(_suggest("Perpendicolare", "Sketcher_ConstrainPerpendicular", "Rendi perpendicolari le linee", 24))
-            suggestions.append(_suggest("Uguale", "Sketcher_ConstrainEqual", "Rendi uguali le lunghezze", 23))
-        elif (l1 and c2) or (c1 and l2):
-            suggestions.append(_suggest("Tangente", "Sketcher_ConstrainTangent", "Linea e arco/cerchio possono essere resi tangenti", 80))
+
+            if cross < math.sin(math.radians(12)):
+                suggestions.append(_suggest("Parallelo", "parallel", "Le linee sono quasi parallele", 100 - cross * 100))
+            else:
+                suggestions.append(_suggest("Parallelo", "parallel", "Rendi parallele le linee", 58))
+            if dot < math.sin(math.radians(12)):
+                suggestions.append(_suggest("Perpendicolare", "perpendicular", "Le linee sono quasi a 90°", 99 - dot * 100))
+            else:
+                suggestions.append(_suggest("Perpendicolare", "perpendicular", "Rendi perpendicolari le linee", 57))
+            if rel < 0.18:
+                suggestions.append(_suggest("Uguale", "equal", "Lunghezze simili", 88 - rel * 100))
+            else:
+                suggestions.append(_suggest("Uguale", "equal", "Rendi uguali le lunghezze", 48))
+            if near / scale < 0.10:
+                suggestions.append(_suggest("Coincidente", "coincident", "Estremità molto vicine", 91 - near / scale * 100))
+            suggestions.append(_suggest("Angolo", "angle", "Quota automatica tra due linee", 76, "dimension"))
+
+        elif (l1 and c2) or (c1 and l2) or pair == {"circle", "edge"}:
+            suggestions.append(_suggest("Tangente", "tangent", "Linea/bordo e cerchio possono essere tangenti", 100))
+            suggestions.append(_suggest("Distanza", "distance", "Quota tra gli elementi", 55, "dimension"))
+
         elif c1 and c2:
             rel = abs(c1["radius"] - c2["radius"]) / max((c1["radius"] + c2["radius"]) * 0.5, 1e-9)
-            if rel < 0.12:
-                suggestions.append(_suggest("Uguale", "Sketcher_ConstrainEqual", "I raggi sono molto simili", 90 - rel * 100))
-            suggestions.append(_suggest("Tangente", "Sketcher_ConstrainTangent", "Rendi tangenti i cerchi/archi", 35))
-            suggestions.append(_suggest("Uguale", "Sketcher_ConstrainEqual", "Rendi uguali i raggi", 30))
-        else:
-            suggestions.append(_suggest("Coincidente", "Sketcher_ConstrainCoincident", "Vincola punti coincidenti", 30))
-    else:
-        suggestions.append(_suggest("Uguale", "Sketcher_ConstrainEqual", "Applica uguaglianza alle geometrie compatibili", 45))
-        suggestions.append(_suggest("Coincidente", "Sketcher_ConstrainCoincident", "Vincola punti compatibili", 30))
+            suggestions.append(_suggest("Concentrico", "coincident", "Allinea i centri: utile anche sui fori proiettati", 100))
+            suggestions.append(_suggest("Uguale", "equal", "Raggi uguali", 88 if rel < 0.18 else 58))
+            suggestions.append(_suggest("Tangente", "tangent", "Rendi tangenti cerchi/archi", 72))
 
-    # Drop unavailable suggestions, remove duplicates, then rank by confidence.
+        elif "vertex" in pair and ("line" in pair or "edge" in pair or "curve" in pair):
+            suggestions.append(_suggest("Punto su oggetto", "point_on", "Vincola il punto alla geometria", 100))
+            suggestions.append(_suggest("Distanza", "distance", "Quota punto-geometria", 70, "dimension"))
+
+        elif kinds.count("vertex") == 2:
+            suggestions.append(_suggest("Coincidente", "coincident", "Unisci i due punti", 100))
+            suggestions.append(_suggest("Distanza", "distance", "Quota distanza tra i punti", 92, "dimension"))
+            suggestions.append(_suggest("Quota X", "distance_x", "Distanza orizzontale", 83, "dimension"))
+            suggestions.append(_suggest("Quota Y", "distance_y", "Distanza verticale", 82, "dimension"))
+
+        else:
+            suggestions.append(_suggest("Coincidente", "coincident", "Vincolo di coincidenza/concentricità", 60))
+            suggestions.append(_suggest("Tangente", "tangent", "Prova tangenza tra gli elementi", 55))
+            suggestions.append(_suggest("Distanza", "distance", "Quota gli elementi", 50, "dimension"))
+
+    else:
+        suggestions.append(_suggest("Uguale", "equal", "Uguaglianza per geometrie compatibili", 70))
+        suggestions.append(_suggest("Coincidente", "coincident", "Coincidenza per punti compatibili", 55))
+        suggestions.append(_suggest("Simmetria", "symmetric", "Tre elementi possono definire una simmetria", 50))
+
     dedup = {}
-    for s in suggestions:
-        if not s:
+    for suggestion in suggestions:
+        if not suggestion:
             continue
-        prev = dedup.get(s["command"])
-        if prev is None or s["score"] > prev["score"]:
-            dedup[s["command"]] = s
-    ordered = sorted(dedup.values(), key=lambda s: (-s["score"], s["label"]))
+        command = suggestion["command"]
+        previous = dedup.get(command)
+        if previous is None or suggestion["score"] > previous["score"]:
+            dedup[command] = suggestion
+    ordered = sorted(dedup.values(), key=lambda x: (-x["score"], x["label"]))
     return ordered[: max(1, int(limit))]
+
+
+def best_dimension_suggestion():
+    for suggestion in constraint_suggestions(limit=8):
+        if suggestion.get("kind") == "dimension":
+            return suggestion
+    return None
 
 
 def apply_best_constraint():
@@ -300,10 +445,10 @@ def apply_best_constraint():
     if not suggestions:
         return False
     try:
-        Gui.runCommand(suggestions[0]["command"])
+        Gui.runCommand(suggestions[0]["command"], 0)
         return True
     except Exception as exc:
-        App.Console.PrintWarning("[SolidFlowUX] Smart constraint failed: {}\n".format(exc))
+        App.Console.PrintWarning("SolidFlow Smart constraint: %s\n" % exc)
         return False
 
 
@@ -311,14 +456,12 @@ class SmartSketchSettingsDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent or Gui.getMainWindow())
         self.setWindowTitle("SolidFlow - Smart Sketch")
-        self.resize(430, 230)
+        self.resize(450, 250)
         root = QtWidgets.QVBoxLayout(self)
-        root.setContentsMargins(14, 14, 14, 14)
-        root.setSpacing(10)
 
         intro = QtWidgets.QLabel(
-            "SolidFlow usa il motore AutoConstraint nativo di FreeCAD e aggiunge suggerimenti "
-            "contestuali senza imporre automaticamente vincoli rischiosi.",
+            "SolidFlow usa il motore AutoConstraint nativo di FreeCAD. I suggerimenti "
+            "di vincolo e quota non vengono mai applicati automaticamente: scegli tu.",
             self,
         )
         intro.setWordWrap(True)
@@ -328,8 +471,12 @@ class SmartSketchSettingsDialog(QtWidgets.QDialog):
         self.snap.setChecked(smart_snap_enabled())
         root.addWidget(self.snap)
 
+        self.hints = QtWidgets.QCheckBox("Mostra mini-finestra vincoli/quote alla selezione", self)
+        self.hints.setChecked(constraint_hints_enabled())
+        root.addWidget(self.hints)
+
         row = QtWidgets.QHBoxLayout()
-        row.addWidget(QtWidgets.QLabel("Ritardo suggerimento snap", self))
+        row.addWidget(QtWidgets.QLabel("Ritardo snap", self))
         self.delay = QtWidgets.QSpinBox(self)
         self.delay.setRange(0, 1000)
         self.delay.setSingleStep(25)
@@ -338,18 +485,6 @@ class SmartSketchSettingsDialog(QtWidgets.QDialog):
         row.addWidget(self.delay)
         row.addStretch(1)
         root.addLayout(row)
-
-        self.hints = QtWidgets.QCheckBox("Mostra automaticamente i vincoli suggeriti vicino al cursore", self)
-        self.hints.setChecked(constraint_hints_enabled())
-        root.addWidget(self.hints)
-
-        note = QtWidgets.QLabel(
-            "Suggerimenti: orizzontale/verticale, coincidente, uguale, parallelo, "
-            "perpendicolare, tangente e quote, in base alla geometria selezionata.",
-            self,
-        )
-        note.setWordWrap(True)
-        root.addWidget(note)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
@@ -361,20 +496,15 @@ class SmartSketchSettingsDialog(QtWidgets.QDialog):
 
     def accept(self):
         set_smart_snap_enabled(self.snap.isChecked())
-        set_smart_snap_delay(self.delay.value())
         set_constraint_hints_enabled(self.hints.isChecked())
-        if self.snap.isChecked():
-            apply_smart_snap_preferences()
+        set_smart_snap_delay(self.delay.value())
         super().accept()
 
 
-_open_settings = []
-
-
 def show_smart_sketch_settings():
-    dlg = SmartSketchSettingsDialog()
-    _open_settings.append(dlg)
-    dlg.finished.connect(lambda _r, d=dlg: _open_settings.remove(d) if d in _open_settings else None)
-    dlg.show()
-    dlg.raise_()
-    dlg.activateWindow()
+    dialog = SmartSketchSettingsDialog()
+    runner = getattr(dialog, "exec", None)
+    if callable(runner):
+        runner()
+    else:
+        dialog.exec_()
