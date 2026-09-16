@@ -1,27 +1,23 @@
 # -*- coding: utf-8 -*-
-"""SolidFlow UX GUI bootstrap.
+"""SolidFlow UX GUI bootstrap — beta10 consolidation.
 
-The plain ``S`` key is intentionally owned only by ``solidflow_ui``'s event
-filter. Do not add a second QAction/FreeCAD accelerator for ``S`` here.
+The plain ``S`` key is owned only by ``solidflow_ui``.
 
 Load order:
-1. consolidated base UI/palette/event-filter;
-2. beta.4 Smart Sketch / Quick Constraints;
+1. consolidated UI/palette/event-filter;
+2. consolidated Smart Sketch / dimensions / quick constraints / theme;
 3. beta.5 Fillet Doctor / Revolution+ / Studio Shadows;
 4. beta.6 Sweep / Loft / Helix / Thread Wizard;
-5. beta.7 Mesh Doctor / Appearance Studio / palette integration;
-6. beta.8 pattern integration;
-7. beta.9 stabilization and diagnostics.
+5. beta.7 Mesh Doctor / Appearance Studio integration.
 
-Every newer layer is additive: a failure in an experimental layer must not
-prevent the stable ``S`` palette from loading.
+Historical beta.4/patterns/beta.9 files remain in the repository for migration
+and comparison but are no longer runtime patch layers.
 """
 
 import traceback
 
 import FreeCAD as App
 import FreeCADGui as Gui
-
 
 STATUS = {}
 App.__solidflow_status__ = STATUS
@@ -35,23 +31,7 @@ def _record(name, module=None, error=None):
         STATUS[name] = "ERRORE: " + str(error)
 
 
-def _load_base_ui():
-    try:
-        import solidflow_ui
-        installer = getattr(solidflow_ui, "install", None)
-        if callable(installer):
-            installer()
-        _record("solidflow_ui", solidflow_ui)
-        return solidflow_ui
-    except Exception as exc:
-        _record("solidflow_ui", error=exc)
-        App.Console.PrintError(
-            "SolidFlow: errore caricamento interfaccia base:\n%s\n" % traceback.format_exc()
-        )
-        return None
-
-
-def _load_layer(name):
+def _load_layer(name, required=False):
     try:
         module = __import__(name)
         installer = getattr(module, "install", None)
@@ -61,21 +41,21 @@ def _load_layer(name):
         return module
     except ModuleNotFoundError as exc:
         STATUS[name] = "assente"
-        App.Console.PrintWarning("SolidFlow: layer %s assente: %s\n" % (name, exc))
+        message = "SolidFlow: layer %s assente: %s\n" % (name, exc)
+        if required:
+            App.Console.PrintError(message)
+        else:
+            App.Console.PrintWarning(message)
     except Exception as exc:
         _record(name, error=exc)
-        App.Console.PrintError(
-            "SolidFlow %s:\n%s\n" % (name, traceback.format_exc())
-        )
+        App.Console.PrintError("SolidFlow %s:\n%s\n" % (name, traceback.format_exc()))
     return None
 
 
-_BASE_UI = _load_base_ui()
+_BASE_UI = _load_layer("solidflow_ui", required=True)
 
 
 class _ShowShortcutBar:
-    """Menu/toolbar command only. No keyboard accelerator on purpose."""
-
     def GetResources(self):
         return {
             "MenuText": "Mostra palette SolidFlow",
@@ -118,12 +98,6 @@ class _ToggleShortcut:
                     return
                 except Exception:
                     pass
-        params = App.ParamGet("User parameter:BaseApp/Preferences/Mod/SolidFlowUX")
-        current = params.GetBool("EnableSShortcut", True)
-        params.SetBool("EnableSShortcut", not current)
-        App.Console.PrintMessage(
-            "SolidFlow: tasto S %s.\n" % ("attivo" if not current else "disattivato")
-        )
 
 
 try:
@@ -133,11 +107,7 @@ except Exception as exc:
     App.Console.PrintWarning("SolidFlow: registrazione comandi GUI: %s\n" % exc)
 
 
-_load_layer("solidflow_beta4")
-
-# Qt6/PySide6 moved QActionGroup from QtWidgets to QtGui. FreeCAD's PySide
-# compatibility shim varies by build, so provide the legacy location expected
-# by the beta.5 UI when necessary.
+# Qt compatibility shim used by beta.5 on builds where QActionGroup lives in QtGui.
 try:
     from PySide import QtGui, QtWidgets
     if not hasattr(QtWidgets, "QActionGroup") and hasattr(QtGui, "QActionGroup"):
@@ -145,12 +115,11 @@ try:
 except Exception:
     pass
 
+_load_layer("solidflow_sketch", required=True)
 _load_layer("solidflow_beta5")
 _load_layer("solidflow_beta6")
 _load_layer("solidflow_beta7")
-_load_layer("solidflow_patterns")
-_load_layer("solidflow_beta9")
 
 App.Console.PrintMessage(
-    "SolidFlow bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
+    "SolidFlow beta10 bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
 )
