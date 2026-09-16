@@ -2,7 +2,7 @@
 ; Built with Inno Setup 6. No administrator privileges required.
 
 #define MyAppName "SolidFlow UX"
-#define MyAppVersion "0.4.0-beta.10-r2"
+#define MyAppVersion "0.4.0-beta.11"
 #define MyAppPublisher "SolidFlow UX Project"
 #define MyAppURL "https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX"
 
@@ -33,7 +33,7 @@ RestartApplications=no
 SetupLogging=yes
 
 [Files]
-; Runtime beta10 only. Historical patch layers stay in GitHub but are not installed.
+; Runtime beta11 only. Historical patch layers stay in GitHub but are not installed.
 Source: "..\SolidFlowUX\Init.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\InitGui.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_ui.py"; DestDir: "{app}"; Flags: ignoreversion
@@ -47,6 +47,10 @@ Source: "..\SolidFlowUX\solidflow_beta6.py"; DestDir: "{app}"; Flags: ignorevers
 Source: "..\SolidFlowUX\solidflow_mesh.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_appearance.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_beta7.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_profiles.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_fillet.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_paths.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_workflows.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\manifest.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\README.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\SolidFlowUX\CHANGELOG.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
