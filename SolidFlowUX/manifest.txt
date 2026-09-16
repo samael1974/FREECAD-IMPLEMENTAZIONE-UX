@@ -1,4 +1,4 @@
-# SolidFlow rolling update manifest — beta10 runtime
+# SolidFlow rolling update manifest — beta11 runtime
 Init.py
 InitGui.py
 solidflow_ui.py
@@ -12,3 +12,7 @@ solidflow_beta6.py
 solidflow_mesh.py
 solidflow_appearance.py
 solidflow_beta7.py
+solidflow_profiles.py
+solidflow_fillet.py
+solidflow_paths.py
+solidflow_workflows.py
