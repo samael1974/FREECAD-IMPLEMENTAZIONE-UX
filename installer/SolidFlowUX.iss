@@ -2,7 +2,7 @@
 ; Built with Inno Setup 6. No administrator privileges required.
 
 #define MyAppName "SolidFlow UX"
-#define MyAppVersion "0.4.0-beta.10"
+#define MyAppVersion "0.4.0-beta.10-r2"
 #define MyAppPublisher "SolidFlow UX Project"
 #define MyAppURL "https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX"
 
@@ -50,6 +50,8 @@ Source: "..\SolidFlowUX\solidflow_beta7.py"; DestDir: "{app}"; Flags: ignorevers
 Source: "..\SolidFlowUX\manifest.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\README.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "..\SolidFlowUX\CHANGELOG.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Embedded maintenance helper. Extracted to {tmp}, never installed in the add-on directory.
+Source: "SolidFlowUX-preinstall.ps1"; Flags: dontcopy
 
 [InstallDelete]
 ; Remove historical runtime patch files from older installations.
@@ -92,54 +94,29 @@ begin
   Result := True;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+procedure RunPreInstallMaintenance();
 var
-  LegacyDir, BackupRoot, BackupDir, Stamp: String;
+  ScriptPath, Params: String;
+  ResultCode: Integer;
 begin
-  Result := '';
-  LegacyDir := ExpandConstant('{userappdata}\FreeCAD\Mod\SolidFlowUX');
-  if not DirExists(LegacyDir) then
-    exit;
+  ExtractTemporaryFile('SolidFlowUX-preinstall.ps1');
+  ScriptPath := ExpandConstant('{tmp}\SolidFlowUX-preinstall.ps1');
+  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '"';
 
-  Stamp := GetDateTimeString('yyyymmdd_hhnnss', '', '');
-  BackupRoot := ExpandConstant('{userappdata}\FreeCAD\SolidFlowUX_Legacy_Backups');
-  BackupDir := AddBackslash(BackupRoot) + 'SolidFlowUX_' + Stamp;
-  ForceDirectories(BackupRoot);
-
-  if not RenameFile(LegacyDir, BackupDir) then
+  if not Exec('powershell.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
-    Result := 'È stata trovata una vecchia installazione SolidFlow in:' + #13#10 +
-              LegacyDir + #13#10 + #13#10 +
-              'Non sono riuscito ad archiviarla automaticamente. ' +
-              'Rinomina o sposta quella cartella e ripeti l''installazione per evitare due copie di SolidFlow.';
+    MsgBox('Non è stato possibile avviare la manutenzione pre-installazione.' + #13#10 +
+           'L''installazione proseguirà, ma controlla che non esista una seconda copia in FreeCAD\Mod\SolidFlowUX.',
+           mbError, MB_OK);
     exit;
   end;
 
-  MsgBox('La vecchia installazione SolidFlow è stata archiviata in:' + #13#10 +
-         BackupDir,
-         mbInformation, MB_OK);
-end;
-
-procedure BackupExistingInstall();
-var
-  TargetDir, BackupRoot, BackupDir, Stamp, PSArgs: String;
-  ResultCode: Integer;
-begin
-  TargetDir := ExpandConstant('{app}');
-  if not DirExists(TargetDir) then
-    exit;
-
-  Stamp := GetDateTimeString('yyyymmdd_hhnnss', '', '');
-  BackupRoot := AddBackslash(TargetDir) + '_backup';
-  BackupDir := AddBackslash(BackupRoot) + 'installer_' + Stamp;
-  ForceDirectories(BackupDir);
-
-  PSArgs := '-NoProfile -ExecutionPolicy Bypass -Command "' +
-    '$src=''' + TargetDir + '''; $dst=''' + BackupDir + '''; ' +
-    'Get-ChildItem -LiteralPath $src -File | Where-Object {$_.Name -ne ''unins000.exe'' -and $_.Name -ne ''unins000.dat''} | ' +
-    'Copy-Item -Destination $dst -Force"';
-
-  Exec('powershell.exe', PSArgs, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if ResultCode <> 0 then
+  begin
+    MsgBox('La manutenzione pre-installazione ha restituito un errore.' + #13#10 +
+           'L''installazione proseguirà, ma controlla la cartella FreeCAD\Mod\SolidFlowUX.',
+           mbError, MB_OK);
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -147,7 +124,7 @@ var
   CacheDir: String;
 begin
   if CurStep = ssInstall then
-    BackupExistingInstall();
+    RunPreInstallMaintenance();
 
   if CurStep = ssPostInstall then
   begin
