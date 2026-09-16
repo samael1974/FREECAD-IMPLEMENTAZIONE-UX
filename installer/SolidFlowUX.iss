@@ -33,9 +33,30 @@ RestartApplications=no
 SetupLogging=yes
 
 [Files]
-Source: "..\SolidFlowUX\*.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\SolidFlowUX\*.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "..\SolidFlowUX\*.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Runtime beta10 only. Historical patch layers stay in GitHub but are not installed.
+Source: "..\SolidFlowUX\Init.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\InitGui.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_ui.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_features.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_smart.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_sketch.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_import.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_viewbar.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_beta5.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_beta6.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_mesh.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_appearance.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_beta7.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\manifest.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\README.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "..\SolidFlowUX\CHANGELOG.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
+[InstallDelete]
+; Remove historical runtime patch files from older installations.
+Type: files; Name: "{app}\solidflow_beta4.py"
+Type: files; Name: "{app}\solidflow_beta9.py"
+Type: files; Name: "{app}\solidflow_patterns.py"
+Type: filesandordirs; Name: "{app}\__pycache__"
 
 [Icons]
 Name: "{userprograms}\SolidFlow UX\Apri cartella SolidFlow UX"; Filename: "{app}"
@@ -69,6 +90,34 @@ begin
     exit;
   end;
   Result := True;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  LegacyDir, BackupRoot, BackupDir, Stamp: String;
+begin
+  Result := '';
+  LegacyDir := ExpandConstant('{userappdata}\FreeCAD\Mod\SolidFlowUX');
+  if not DirExists(LegacyDir) then
+    exit;
+
+  Stamp := GetDateTimeString('yyyymmdd_hhnnss', '', '');
+  BackupRoot := ExpandConstant('{userappdata}\FreeCAD\SolidFlowUX_Legacy_Backups');
+  BackupDir := AddBackslash(BackupRoot) + 'SolidFlowUX_' + Stamp;
+  ForceDirectories(BackupRoot);
+
+  if not RenameFile(LegacyDir, BackupDir) then
+  begin
+    Result := 'È stata trovata una vecchia installazione SolidFlow in:' + #13#10 +
+              LegacyDir + #13#10 + #13#10 +
+              'Non sono riuscito ad archiviarla automaticamente. ' +
+              'Rinomina o sposta quella cartella e ripeti l''installazione per evitare due copie di SolidFlow.';
+    exit;
+  end;
+
+  MsgBox('La vecchia installazione SolidFlow è stata archiviata in:' + #13#10 +
+         BackupDir,
+         mbInformation, MB_OK);
 end;
 
 procedure BackupExistingInstall();
