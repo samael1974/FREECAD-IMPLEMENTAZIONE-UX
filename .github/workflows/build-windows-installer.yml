@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify complete SolidFlow source tree
+      - name: Verify complete SolidFlow runtime tree
         shell: pwsh
         run: |
           $required = @(
@@ -25,16 +25,15 @@ jobs:
             'SolidFlowUX/InitGui.py',
             'SolidFlowUX/solidflow_ui.py',
             'SolidFlowUX/solidflow_features.py',
-            'SolidFlowUX/solidflow_import.py',
             'SolidFlowUX/solidflow_smart.py',
+            'SolidFlowUX/solidflow_sketch.py',
+            'SolidFlowUX/solidflow_import.py',
             'SolidFlowUX/solidflow_viewbar.py',
-            'SolidFlowUX/solidflow_beta4.py',
             'SolidFlowUX/solidflow_beta5.py',
             'SolidFlowUX/solidflow_beta6.py',
             'SolidFlowUX/solidflow_mesh.py',
             'SolidFlowUX/solidflow_appearance.py',
-            'SolidFlowUX/solidflow_beta7.py',
-            'SolidFlowUX/solidflow_patterns.py'
+            'SolidFlowUX/solidflow_beta7.py'
           )
           $missing = $required | Where-Object { -not (Test-Path $_) }
           if ($missing) {
