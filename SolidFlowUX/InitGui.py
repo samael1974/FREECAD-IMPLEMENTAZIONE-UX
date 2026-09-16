@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """SolidFlow UX GUI bootstrap — beta10 consolidation.
 
-The plain ``S`` key is owned only by ``solidflow_ui``.
+The plain ``S`` key is intentionally owned only by ``solidflow_ui``.
 
 Load order:
 1. consolidated UI/palette/event-filter;
