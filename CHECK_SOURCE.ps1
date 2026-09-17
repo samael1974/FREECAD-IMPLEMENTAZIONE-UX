@@ -69,7 +69,8 @@ $issText = Get-Content $iss -Raw
 $notPackaged = @()
 foreach ($file in $files) {
     if ($file -eq 'manifest.txt') { continue }
-    if ($issText -notmatch [regex]::Escape("SolidFlowUX\\$file")) {
+    $needle = 'SolidFlowUX\' + $file
+    if ($issText -notmatch [regex]::Escape($needle)) {
         $notPackaged += $file
     }
 }
