@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-"""SolidFlow UX GUI bootstrap — beta11 workflow consolidation.
+"""SolidFlow UX GUI bootstrap — beta12 UX stabilization.
 
 The plain ``S`` key is intentionally owned only by ``solidflow_ui``.
 
 Load order:
 1. consolidated UI/palette/event-filter;
 2. consolidated Smart Sketch / dimensions / quick constraints / theme;
-3. beta.5 Revolution+ / legacy Studio Shadows;
+3. beta.5 Revolution+ / Studio Shadows;
 4. beta.6 native Sweep / Loft / Helix / Thread Wizard;
 5. beta.7 Mesh Doctor / Appearance Studio integration;
-6. beta11 profile-region picker, interactive Fillet and 3D path workflows.
+6. beta11 profile-region picker, interactive Fillet and 3D path workflows;
+7. beta12 UX stabilization (direct regions, external refs, dimensions, shadows).
 
 Historical beta.4/patterns/beta.9 files remain in the repository for migration
 and comparison but are no longer runtime patch layers.
@@ -108,8 +109,6 @@ except Exception as exc:
     App.Console.PrintWarning("SolidFlow: registrazione comandi GUI: %s\n" % exc)
 
 
-# Qt compatibility shim used by legacy beta.5 on builds where QActionGroup
-# lives in QtGui rather than QtWidgets.
 try:
     from PySide import QtGui, QtWidgets
     if not hasattr(QtWidgets, "QActionGroup") and hasattr(QtGui, "QActionGroup"):
@@ -123,7 +122,8 @@ _load_layer("solidflow_beta6")
 _load_layer("solidflow_beta7")
 _load_layer("solidflow_profiles", required=True)
 _load_layer("solidflow_workflows", required=True)
+_load_layer("solidflow_beta12", required=True)
 
 App.Console.PrintMessage(
-    "SolidFlow beta11 bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
+    "SolidFlow beta12 bootstrap: %s\nLayer: %s\n" % (__file__, STATUS)
 )
