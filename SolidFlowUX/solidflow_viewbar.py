@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""SolidFlow always-available display style bar positioned below the navigation cube."""
+"""SolidFlow always-available vertical display/style bar below the navigation cube."""
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -45,7 +45,6 @@ def _home_view():
 
 
 def _run_draw_style(index, fallback_name=None):
-    """Run FreeCAD's native global draw-style command, with an ActiveView fallback."""
     try:
         Gui.runCommand("Std_DrawStyle", int(index))
         return True
@@ -61,30 +60,50 @@ def _run_draw_style(index, fallback_name=None):
     return False
 
 
-def _toggle_shadows():
+def _studio_controller():
     try:
         import solidflow_beta5
-        solidflow_beta5._studio.toggle()
-        return
-    except Exception as exc:
-        App.Console.PrintWarning("SolidFlow Ombre: %s\n" % exc)
+        return solidflow_beta5._studio
+    except Exception:
+        return None
+
+
+def _toggle_shadows():
+    studio = _studio_controller()
+    if studio is not None:
+        try:
+            studio.toggle()
+            return
+        except Exception as exc:
+            App.Console.PrintWarning("SolidFlow Ombre/Piano: %s\n" % exc)
     try:
         QtWidgets.QMessageBox.information(
-            Gui.getMainWindow(), "SolidFlow - Ombre",
-            "Il layer Ombre non è caricato. Apri SolidFlow > Diagnostica SolidFlow per verificare i moduli.",
+            Gui.getMainWindow(), "SolidFlow - Ombre/Piano",
+            "Il modulo Studio non è disponibile. Controlla SolidFlow > Diagnostica SolidFlow.",
         )
     except Exception:
         pass
 
 
+def _set_studio_plane(plane):
+    studio = _studio_controller()
+    if studio is None:
+        return
+    try:
+        studio.set_plane(str(plane))
+        if not getattr(studio, "enabled", False):
+            studio.set_enabled(True)
+    except Exception as exc:
+        App.Console.PrintWarning("SolidFlow piano %s: %s\n" % (plane, exc))
+
+
 def _material_editor():
-    # Prefer the SolidFlow appearance/material editor; keep native FreeCAD as fallback.
     try:
         import solidflow_appearance
         solidflow_appearance.launch_appearance_studio()
         return
-    except Exception:
-        pass
+    except Exception as exc:
+        App.Console.PrintWarning("SolidFlow Materiale: %s\n" % exc)
     try:
         cmd = Gui.Command.get("Std_SetMaterial")
         if cmd:
@@ -92,27 +111,28 @@ def _material_editor():
             return
     except Exception:
         pass
-    try:
-        QtWidgets.QMessageBox.information(
-            Gui.getMainWindow(),
-            "SolidFlow - Materiale",
-            "Il comando Materiale non è disponibile nel contesto corrente. Seleziona prima un oggetto solido.",
-        )
-    except Exception:
-        pass
+    QtWidgets.QMessageBox.information(
+        Gui.getMainWindow(),
+        "SolidFlow - Materiale",
+        "Seleziona prima un oggetto solido, poi riprova.",
+    )
 
 
-def _render_view():
-    # This is intentionally a viewport rendering preset, not a ray tracer.
+def _studio_view():
+    """Fast modelling/material preview, deliberately not a ray-traced renderer."""
     _run_draw_style(5, "Shaded")
     try:
         Gui.runCommand("Std_PerspectiveCamera")
     except Exception:
         pass
+    try:
+        if Gui.ActiveDocument:
+            Gui.ActiveDocument.ActiveView.fitAll()
+    except Exception:
+        pass
 
 
 def _active_view_host(main_window):
-    """Find the current MDI document widget so the bar overlays the 3D view."""
     try:
         mdi = main_window.findChild(QtWidgets.QMdiArea)
         if mdi:
@@ -131,7 +151,7 @@ def _active_view_host(main_window):
 
 
 class DisplayStyleBar(QtWidgets.QFrame):
-    """Compact viewport navigation/style palette kept just below FreeCAD's navigation cube."""
+    """Vertical modelling/view palette kept below FreeCAD's navigation cube."""
 
     def __init__(self, main_window):
         super().__init__(main_window)
@@ -145,38 +165,63 @@ class DisplayStyleBar(QtWidgets.QFrame):
                 background: palette(window);
             }
             QToolButton {
-                min-width: 62px;
-                min-height: 29px;
-                padding: 2px 5px;
+                min-width: 92px;
+                min-height: 28px;
+                padding: 3px 7px;
                 border-radius: 4px;
                 font-size: 11px;
+                text-align: left;
             }
             QToolButton:hover {
                 background: palette(highlight);
                 color: palette(highlighted-text);
             }
         """)
-        grid = QtWidgets.QGridLayout(self)
-        grid.setContentsMargins(4, 4, 4, 4)
-        grid.setHorizontalSpacing(3)
-        grid.setVerticalSpacing(3)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(3)
 
         specs = [
-            ("🏠 Home", "Isometrica + Inquadra tutto. Shift+clic: solo Inquadra tutto", _home_view),
+            ("🏠  Home", "Isometrica + Inquadra tutto. Shift+clic: solo Inquadra tutto", _home_view),
             ("Wire", "Wireframe", lambda: _run_draw_style(2, "Wireframe")),
             ("Solido", "Solido ombreggiato", lambda: _run_draw_style(5, "Shaded")),
             ("Bordi", "Solido con bordi / Flat Lines", lambda: _run_draw_style(6, "Flat Lines")),
             ("Nascoste", "Linee nascoste", lambda: _run_draw_style(3, "Hidden Line")),
-            ("Ombre", "Piano di appoggio e ombra di contatto SolidFlow", _toggle_shadows),
-            ("Render", "Vista ombreggiata prospettica (viewport, non ray tracing)", _render_view),
-            ("Materiale", "Appearance Studio: materiale, colore e texture", _material_editor),
         ]
-        for i, (text, tip, callback) in enumerate(specs):
+        for text, tip, callback in specs:
             b = QtWidgets.QToolButton(self)
             b.setText(text)
             b.setToolTip(tip)
             b.clicked.connect(lambda _checked=False, cb=callback: cb())
-            grid.addWidget(b, i // 4, i % 4)
+            layout.addWidget(b)
+
+        shadow = QtWidgets.QToolButton(self)
+        shadow.setText("Ombre/Piano")
+        shadow.setToolTip("Attiva piano di appoggio e ombra; usa la freccia per scegliere XY/XZ/YZ")
+        shadow.clicked.connect(_toggle_shadows)
+        menu = QtWidgets.QMenu(shadow)
+        menu.addAction("Piano XY", lambda: _set_studio_plane("XY"))
+        menu.addAction("Piano XZ", lambda: _set_studio_plane("XZ"))
+        menu.addAction("Piano YZ", lambda: _set_studio_plane("YZ"))
+        shadow.setMenu(menu)
+        try:
+            shadow.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+        except Exception:
+            pass
+        layout.addWidget(shadow)
+
+        studio = QtWidgets.QToolButton(self)
+        studio.setText("Studio")
+        studio.setToolTip("Vista rapida materiali/modello: shaded + prospettiva. Non è un ray tracer.")
+        studio.clicked.connect(_studio_view)
+        layout.addWidget(studio)
+
+        material = QtWidgets.QToolButton(self)
+        material.setText("Materiale")
+        material.setToolTip("Appearance Studio: colore, materiale e texture")
+        material.clicked.connect(_material_editor)
+        layout.addWidget(material)
+
         self.adjustSize()
         self.hide()
 
@@ -202,6 +247,7 @@ class DisplayStyleBar(QtWidgets.QFrame):
             self.show()
         self.adjustSize()
         x = max(4, host.width() - self.width() - 18)
+        # Below the navigation cube, with enough room for the vertical stack.
         y = min(max(132, 8), max(8, host.height() - self.height() - 8))
         self.move(x, y)
         self.raise_()
