@@ -40,8 +40,14 @@ jobs:
             'SolidFlowUX/solidflow_mesh.py',
             'SolidFlowUX/solidflow_appearance.py',
             'SolidFlowUX/solidflow_beta7.py',
+            'SolidFlowUX/solidflow_profiles.py',
+            'SolidFlowUX/solidflow_fillet.py',
+            'SolidFlowUX/solidflow_paths.py',
+            'SolidFlowUX/solidflow_workflows.py',
+            'SolidFlowUX/solidflow_beta12.py',
             'SolidFlowUX/manifest.txt',
-            'installer/SolidFlowUX.iss'
+            'installer/SolidFlowUX.iss',
+            'installer/SolidFlowUX-preinstall.ps1'
           )
           $missing = $required | Where-Object { -not (Test-Path $_) }
           if ($missing) {
