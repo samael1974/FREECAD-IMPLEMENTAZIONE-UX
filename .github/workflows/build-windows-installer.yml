@@ -8,6 +8,8 @@ on:
     paths:
       - 'SolidFlowUX/**'
       - 'installer/**'
+      - 'CHECK_SOURCE.ps1'
+      - 'BUILD_INSTALLER_LOCAL.ps1'
       - '.github/workflows/build-windows-installer.yml'
     tags:
       - 'v*'
@@ -47,13 +49,27 @@ jobs:
             'SolidFlowUX/solidflow_beta12.py',
             'SolidFlowUX/manifest.txt',
             'installer/SolidFlowUX.iss',
-            'installer/SolidFlowUX-preinstall.ps1'
+            'installer/SolidFlowUX-preinstall.ps1',
+            'CHECK_SOURCE.ps1',
+            'BUILD_INSTALLER_LOCAL.ps1'
           )
           $missing = $required | Where-Object { -not (Test-Path $_) }
           if ($missing) {
             Write-Error ('Installer source tree incomplete. Missing: ' + ($missing -join ', '))
             exit 1
           }
+
+      - name: Read SolidFlow version
+        shell: pwsh
+        run: |
+          $iss = Get-Content 'installer/SolidFlowUX.iss' -Raw
+          if ($iss -notmatch '#define MyAppVersion "([^"]+)"') {
+            throw 'MyAppVersion not found in installer/SolidFlowUX.iss'
+          }
+          $version = $Matches[1]
+          "SOLIDFLOW_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SOLIDFLOW_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Release version: $version"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -69,6 +85,10 @@ jobs:
           foreach ($file in $runtime) {
             python -m py_compile (Join-Path 'SolidFlowUX' $file)
           }
+
+      - name: Run local source check
+        shell: pwsh
+        run: .\CHECK_SOURCE.ps1 -Strict
 
       - name: Install Inno Setup
         shell: pwsh
@@ -101,10 +121,13 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
-      - name: Publish GitHub Release for version tags
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish installer in GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.SOLIDFLOW_TAG }}
+          target_commitish: ${{ github.sha }}
+          name: SolidFlow UX ${{ env.SOLIDFLOW_VERSION }}
+          prerelease: true
           generate_release_notes: true
           files: |
             dist/*.exe
