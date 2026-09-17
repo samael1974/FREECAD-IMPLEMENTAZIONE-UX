@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Local installer output
+dist/
+
+# Temporary build/check files
+*.log
+*.tmp
+
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
