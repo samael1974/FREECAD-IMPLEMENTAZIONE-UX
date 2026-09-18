@@ -386,15 +386,15 @@ class MeshDoctorDialog(QtWidgets.QDialog):
             obj.Label = self.source.Label + " — Faceted Solid"
             obj.Shape = solid
             self.doc.recompute()
-            if self._transaction:
-                self.doc.commitTransaction()
-                self._transaction = False
-            self._finished = True
             try:
                 self.preview.ViewObject.Visibility = False
                 self.source.ViewObject.Visibility = False
             except Exception:
                 pass
+            if self._transaction:
+                self.doc.commitTransaction()
+                self._transaction = False
+            self._finished = True
             Gui.Selection.clearSelection()
             Gui.Selection.addSelection(obj)
             super().accept()

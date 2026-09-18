@@ -1,8 +1,10 @@
 # Beta 13 — primo incremento di stabilità
 
 Base: `8a97df39f6805683b1ff7a64a89d9a2b846d40d2` (brief del 18 settembre).
-Questa PR non modifica la versione e non pubblica installer. La PR #1 con le
-correzioni di installazione resta separata; nessuna sua modifica viene annullata.
+Aggiornamento: integrate in questo branch le correzioni di installazione della PR #1.
+Versione di prova `0.4.0-beta.13-test.1`, richiesta per i test locali: la CI genera
+un artifact con EXE e macro offline. Non viene creata una Release GitHub e il
+job di pubblicazione esclude esplicitamente le versioni `-test.`.
 
 ## Implementato
 
@@ -27,7 +29,9 @@ correzioni di installazione resta separata; nessuna sua modifica viene annullata
 visibilità di oggetti estranei, Tip, commit, errori) e della vera gestione eventi Qt
 (cambio/chiusura documento, resize, massimizzazione, preferenze). I documenti
 FreeCAD di questi test sono simulati: questo non dimostra la correttezza del kernel.
-La CI usa Python 3.11 e Qt offscreen, senza generare un installer.
+La CI usa Python 3.11 e Qt offscreen. Il job Windows costruisce l’EXE e ne
+verifica l’installazione in un profilo temporaneo confrontando gli hash dei file.
+21 test automatici includono installazione/backup, rollback e dialogo Sweep.
 
 `FreeCADCmd tests/freecad_smoke.py`: aggiunto smoke test nativo di volumi e direzioni
 Pad, Pocket e 20 cicli Cancel/OK/Undo. **Non eseguito nell'ambiente di sviluppo,
@@ -35,15 +39,17 @@ che non dispone di FreeCAD.** Eseguire con FreeCAD 1.1.3 prima della pubblicazio
 Restano da verificare in GUI FreeCAD: raccordi, Profile Picker, Undo della visibilità,
 Sketch edit, cambio workbench, salvataggio/riapertura e barra sulle viste reali.
 
-## Audit delle altre scritture di visibilità
+## Ulteriori correzioni incluse nella build test.1
 
-- `solidflow_paths.py`: Sweep modifica profilo/percorso dopo commit; da migrare.
-- `solidflow_mesh.py`: conversione mesh modifica visibilità dopo commit; da migrare.
-- `solidflow_beta5.py`: vecchio Fillet Doctor nasconde la base dopo commit;
-  vecchia Revolution lo fa prima. Consolidare i percorsi legacy prima di eliminarli.
-- `solidflow_beta6.py`: framework già conserva visibilità/Tip, ma Thread cambia
-  la base dopo `_commit_feature`; da consolidare con l'helper condiviso.
+- Sweep su elica: PreviewTransaction condiviso per Cancel; validazione geometria
+  prima di OK; visibilità di profilo e percorso registrata prima del commit.
+- Mesh: visibilità della conversione in solido registrata prima del commit.
+- Vecchio Fillet Doctor e Thread: nascondono gli input dentro la transazione Undo.
+- Test Qt del dialogo Sweep verificano Cancel e stato visibilità al commit.
 
-P0.3 quindi **non completo per tutti i flussi**. P0.4 (vincoli), P1 (palette Sketch,
-colori, navigazione, pattern, quadranti, raccordi) e P2 restano da implementare.
-Prima di pubblicare beta.13 completare P0 e la checklist nativa del brief.
+## Ancora da completare
+
+La migrazione completa dei flussi legacy all’helper resta aperta. P0.4 (vincoli),
+P1 (palette Sketch, colori, navigazione, pattern, quadranti, raccordi) e P2 restano
+pianificati. Non dichiarare P0 completato finché non sono passate anche le prove
+native; la build test.1 serve a raccogliere proprio queste verifiche.

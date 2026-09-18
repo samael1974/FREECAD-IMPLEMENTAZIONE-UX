@@ -2,133 +2,110 @@ name: Build SolidFlow Windows Installer
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ['SolidFlowUX/**', 'installer/**', 'tools/**', 'tests/**', 'CHECK_SOURCE.ps1', 'BUILD_INSTALLER_LOCAL.ps1', '.github/workflows/build-windows-installer.yml']
   push:
-    branches:
-      - main
-    paths:
-      - 'SolidFlowUX/**'
-      - 'installer/**'
-      - 'CHECK_SOURCE.ps1'
-      - 'BUILD_INSTALLER_LOCAL.ps1'
-      - '.github/workflows/build-windows-installer.yml'
-    tags:
-      - 'v*'
+    branches: [main]
+    paths: ['SolidFlowUX/**', 'installer/**', 'tools/**', 'tests/**', 'CHECK_SOURCE.ps1', 'BUILD_INSTALLER_LOCAL.ps1', '.github/workflows/build-windows-installer.yml']
+    tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-installer:
     runs-on: windows-latest
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify complete SolidFlow runtime tree
-        shell: pwsh
-        run: |
-          $required = @(
-            'SolidFlowUX/Init.py',
-            'SolidFlowUX/InitGui.py',
-            'SolidFlowUX/solidflow_ui.py',
-            'SolidFlowUX/solidflow_features.py',
-            'SolidFlowUX/solidflow_smart.py',
-            'SolidFlowUX/solidflow_sketch.py',
-            'SolidFlowUX/solidflow_import.py',
-            'SolidFlowUX/solidflow_viewbar.py',
-            'SolidFlowUX/solidflow_beta5.py',
-            'SolidFlowUX/solidflow_beta6.py',
-            'SolidFlowUX/solidflow_mesh.py',
-            'SolidFlowUX/solidflow_appearance.py',
-            'SolidFlowUX/solidflow_beta7.py',
-            'SolidFlowUX/solidflow_profiles.py',
-            'SolidFlowUX/solidflow_fillet.py',
-            'SolidFlowUX/solidflow_paths.py',
-            'SolidFlowUX/solidflow_workflows.py',
-            'SolidFlowUX/solidflow_beta12.py',
-            'SolidFlowUX/manifest.txt',
-            'installer/SolidFlowUX.iss',
-            'installer/SolidFlowUX-preinstall.ps1',
-            'CHECK_SOURCE.ps1',
-            'BUILD_INSTALLER_LOCAL.ps1'
-          )
-          $missing = $required | Where-Object { -not (Test-Path $_) }
-          if ($missing) {
-            Write-Error ('Installer source tree incomplete. Missing: ' + ($missing -join ', '))
-            exit 1
-          }
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Qt for regression tests
+        run: python -m pip install PySide6-Essentials==6.8.3
       - name: Read SolidFlow version
+        id: version
         shell: pwsh
         run: |
           $iss = Get-Content 'installer/SolidFlowUX.iss' -Raw
-          if ($iss -notmatch '#define MyAppVersion "([^"]+)"') {
-            throw 'MyAppVersion not found in installer/SolidFlowUX.iss'
-          }
-          $version = $Matches[1]
-          "SOLIDFLOW_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "SOLIDFLOW_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Release version: $version"
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Validate Python syntax
-        shell: pwsh
-        run: |
-          $runtime = Get-Content 'SolidFlowUX/manifest.txt' |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ -and -not $_.StartsWith('#') -and $_.EndsWith('.py') }
-          foreach ($file in $runtime) {
-            python -m py_compile (Join-Path 'SolidFlowUX' $file)
-          }
-
-      - name: Run local source check
+          if ($iss -notmatch '#define MyAppVersion "([^"]+)"') { throw 'Version missing' }
+          "version=$($Matches[1])" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Check source and installer file coverage
         shell: pwsh
         run: .\CHECK_SOURCE.ps1 -Strict
-
+      - name: Test installation, rollback, diagnostics and lazy commands
+        run: python -m unittest discover -s tests -v
+      - name: Test Windows pre-install backup
+        shell: pwsh
+        run: .\tests\test_preinstall.ps1
+      - name: Build offline tester package
+        run: python tools/build_tester_package.py
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress -y
-
       - name: Build installer
         shell: pwsh
         run: |
-          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path $iscc)) {
-            throw 'Inno Setup compiler not found.'
-          }
-          & $iscc 'installer\SolidFlowUX.iss'
-
-      - name: Generate SHA256 checksum
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'installer\SolidFlowUX.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup build failed' }
+      - name: Verify actual EXE installation in a custom profile
         shell: pwsh
         run: |
+          $target = Join-Path $env:RUNNER_TEMP 'FreeCAD test profile\Mod\SolidFlowUX'
           $exe = Get-ChildItem dist -Filter '*.exe' | Select-Object -First 1
-          if (-not $exe) { throw 'Installer EXE not found.' }
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Set-Content -Encoding ascii 'dist\SHA256SUMS.txt'
-          Write-Host "SHA256: $hash"
-
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+          $process = Start-Process $exe.FullName -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$target`"") -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Setup failed: $($process.ExitCode)" }
+          $files = Get-Content SolidFlowUX/manifest.txt | Where-Object { $_.Trim() -and -not $_.StartsWith('#') }
+          foreach ($file in $files) {
+            $installed = Join-Path $target $file.Trim()
+            if (-not (Test-Path $installed)) { throw "Not installed: $file" }
+            if ((Get-FileHash $installed).Hash -ne (Get-FileHash (Join-Path 'SolidFlowUX' $file.Trim())).Hash) { throw "Wrong contents: $file" }
+          }
+      - name: Record test build provenance
+        shell: pwsh
+        run: |
+          @(
+            'SolidFlow UX - experimental tester build',
+            "Version: ${{ steps.version.outputs.version }}",
+            "Commit: $env:GITHUB_SHA",
+            "Build: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
+            'Windows installation verified by CI. Native FreeCAD GUI acceptance pending.',
+            'Read LEGGIMI.txt before installation.'
+          ) | Set-Content -Encoding utf8 dist/BUILD.txt
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip', '.FCMacro' } | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + '  ' + $_.Name
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
         with:
           name: SolidFlowUX-Windows-Installer
           path: |
             dist/*.exe
+            dist/*.zip
+            dist/*.FCMacro
             dist/SHA256SUMS.txt
+            dist/LEGGIMI.txt
+            dist/BUILD.txt
           if-no-files-found: error
-
-      - name: Publish installer in GitHub Releases
-        uses: softprops/action-gh-release@v2
+  publish:
+    needs: build-installer
+    if: ${{ !contains(needs.build-installer.outputs.version, '-test.') && github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: ${{ env.SOLIDFLOW_TAG }}
+          name: SolidFlowUX-Windows-Installer
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build-installer.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: SolidFlow UX ${{ env.SOLIDFLOW_VERSION }}
+          name: SolidFlow UX ${{ needs.build-installer.outputs.version }}
           prerelease: true
           generate_release_notes: true
-          files: |
-            dist/*.exe
-            dist/SHA256SUMS.txt
+          files: dist/*

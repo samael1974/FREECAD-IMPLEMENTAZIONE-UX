@@ -202,6 +202,42 @@ class ViewbarTests(unittest.TestCase):
         finally:
             solidflow_features._body_for = original
 
+    def test_sweep_visibility_is_recorded_before_commit(self):
+        import solidflow_paths
+        doc = Document()
+        dialog = solidflow_paths.SweepPathDialog.__new__(solidflow_paths.SweepPathDialog)
+        QtWidgets.QDialog.__init__(dialog, self.main)
+        dialog.doc = doc
+        dialog.profile, dialog.path = doc.seed, doc.sketch
+        dialog.feature = NS(isValid=lambda: True, ViewObject=NS(Transparency=55),
+                            Shape=NS(isNull=lambda: False, isValid=lambda: True))
+        dialog.ok_button = NS(isEnabled=lambda: True)
+        dialog.keep_path = NS(isChecked=lambda: True)
+        dialog._tx, dialog._accepted = True, False
+        dialog._preview_tx = PreviewTransaction(doc, [doc.seed, doc.sketch], doc.body)
+        dialog._preview_tx.begin('sweep')
+        recorded = []
+        doc.commitTransaction = lambda: recorded.append(
+            (doc.seed.ViewObject.Visibility, doc.sketch.ViewObject.Visibility))
+        self.gui.Selection = NS(clearSelection=lambda: None, addSelection=lambda _: None)
+        dialog.accept()
+        self.assertEqual(recorded, [(False, True)])
+        self.assertTrue(dialog._accepted)
+
+    def test_sweep_cancel_restores_both_inputs(self):
+        import solidflow_paths
+        doc = Document()
+        dialog = solidflow_paths.SweepPathDialog.__new__(solidflow_paths.SweepPathDialog)
+        QtWidgets.QDialog.__init__(dialog, self.main)
+        dialog._preview_tx = PreviewTransaction(doc, [doc.seed, doc.sketch], doc.body)
+        dialog._preview_tx.begin('sweep')
+        doc.seed.ViewObject.Visibility = False
+        doc.sketch.ViewObject.Visibility = True
+        dialog._rollback()
+        self.assertTrue(doc.seed.ViewObject.Visibility)
+        self.assertFalse(doc.sketch.ViewObject.Visibility)
+        self.assertFalse(dialog._tx)
+
 
 if __name__ == '__main__':
     unittest.main()
