@@ -756,11 +756,7 @@ class ThreadWizardDialog(_NativePreviewDialog):
             self.ok_button.setEnabled(False); self.status.setText("Anteprima non valida: " + str(exc))
 
     def _accept(self):
-        if self._commit_feature((self.profile_sketch,)):
-            try:
-                if self.base_feature: self.base_feature.ViewObject.Visibility = False
-                self.profile_sketch.ViewObject.Visibility = False
-            except Exception: pass
+        if self._commit_feature((self.profile_sketch, self.base_feature)):
             super().accept()
 
 

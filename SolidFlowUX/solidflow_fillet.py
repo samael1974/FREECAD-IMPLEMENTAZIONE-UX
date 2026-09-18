@@ -8,6 +8,8 @@ PartDesign::Fillet feature.
 """
 from __future__ import annotations
 
+from solidflow_preview import PreviewTransaction
+
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
@@ -454,7 +456,8 @@ class FilletDoctorDialog(QtWidgets.QDialog):
             _message("Raccordo non valido", "La geometria non accetta questo raccordo.\n\n" + reason, QtWidgets.QMessageBox.Warning)
             return
         doc = self.base.Document
-        doc.openTransaction("SolidFlow - Fillet Doctor")
+        preview = PreviewTransaction(doc, [self.base], body)
+        preview.begin("SolidFlow - Fillet Doctor")
         try:
             feature = body.newObject("PartDesign::Fillet", "Fillet")
             if self.use_all.isChecked():
@@ -467,11 +470,16 @@ class FilletDoctorDialog(QtWidgets.QDialog):
             doc.recompute()
             if not feature.isValid() or not _shape_ok(feature.Shape):
                 raise RuntimeError("FreeCAD non ha prodotto un PartDesign::Fillet valido")
-            doc.commitTransaction()
             try:
                 self.base.ViewObject.Visibility = False
             except Exception:
                 pass
+            preview.commit()
+        except Exception as exc:
+            preview.rollback()
+            _message("SolidFlow Fillet Doctor", "Creazione del raccordo fallita:\n" + str(exc), QtWidgets.QMessageBox.Critical)
+            return
+        try:
             self._remove_observer()
             self._syncing = True
             try:
@@ -481,11 +489,7 @@ class FilletDoctorDialog(QtWidgets.QDialog):
                 self._syncing = False
             super().accept()
         except Exception as exc:
-            try:
-                doc.abortTransaction()
-            except Exception:
-                pass
-            _message("SolidFlow Fillet Doctor", "Creazione del raccordo fallita:\n" + str(exc), QtWidgets.QMessageBox.Critical)
+            App.Console.PrintWarning("SolidFlow: raccordo creato; aggiornamento selezione fallito: %s\n" % exc)
 
     def reject(self):
         self._remove_observer()

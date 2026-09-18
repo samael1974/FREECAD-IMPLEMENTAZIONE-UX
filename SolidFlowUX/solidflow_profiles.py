@@ -8,6 +8,7 @@ Pad/Pocket/Revolution features.  The original Sketch remains reusable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from solidflow_preview import PreviewTransaction
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -164,6 +165,7 @@ def detect_profile_regions(sketch):
     return regions
 
 
+
 class ProfilePickerDialog(QtWidgets.QDialog):
     def __init__(self, sketch, regions, parent=None):
         super().__init__(parent or _main_window())
@@ -171,6 +173,7 @@ class ProfilePickerDialog(QtWidgets.QDialog):
         self.regions = list(regions)
         self.selected_edge_names = None
         self.preview = None
+        self._preview_tx = PreviewTransaction(sketch.Document, [sketch])
         self.setWindowTitle("SolidFlow — Scegli area dello Sketch")
         self.resize(520, 360)
 
@@ -209,17 +212,8 @@ class ProfilePickerDialog(QtWidgets.QDialog):
             self.list_widget.setCurrentRow(0)
 
     def _delete_preview(self):
-        if self.preview is None:
-            return
-        try:
-            doc = self.preview.Document
-            name = self.preview.Name
-            self.preview = None
-            if doc and doc.getObject(name):
-                doc.removeObject(name)
-                doc.recompute()
-        except Exception:
-            self.preview = None
+        self._preview_tx.rollback()
+        self.preview = None
 
     def _region_changed(self, row):
         self._delete_preview()
@@ -235,7 +229,9 @@ class ProfilePickerDialog(QtWidgets.QDialog):
         )
         try:
             doc = self.sketch.Document
-            preview = doc.addObject("PartDesign::Feature", "SolidFlowProfilePreview")
+            self._preview_tx.begin("SolidFlow profile highlight")
+            preview = doc.addObject("Part::Feature", "SolidFlowProfilePreview")
+            self.preview = preview
             preview.Label = "SolidFlow — area selezionata (temporanea)"
             preview.Shape = region.shape
             try:
@@ -259,6 +255,7 @@ class ProfilePickerDialog(QtWidgets.QDialog):
             self.preview = preview
             doc.recompute()
         except Exception as exc:
+            self._delete_preview()
             App.Console.PrintWarning("SolidFlow Profile Picker preview: %s\n" % exc)
 
     def accept(self):
@@ -331,15 +328,7 @@ def launch_profile_feature(mode):
                 return
 
     dlg = features.FeaturePreviewDialog(mode, sketch, subs)
-    result = dlg.exec_()
-    if result == QtWidgets.QDialog.Accepted:
-        # Deliberately keep the source sketch visible/reusable.  PartDesign may
-        # hide a consumed profile automatically, but SolidFlow's workflow is
-        # based on reusing regions from one master sketch where valid.
-        try:
-            sketch.ViewObject.Visibility = True
-        except Exception:
-            pass
+    dlg.exec_()
 
 
 def launch_pad():

@@ -4,10 +4,16 @@ on:
   push:
     paths:
       - 'SolidFlowUX/**/*.py'
+      - 'tests/**'
       - '.github/workflows/python-syntax.yml'
   pull_request:
     paths:
       - 'SolidFlowUX/**/*.py'
+      - 'tests/**'
+      - '.github/workflows/python-syntax.yml'
+
+permissions:
+  contents: read
 
 jobs:
   pycompile:
@@ -22,3 +28,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile SolidFlow sources
         run: python -m py_compile SolidFlowUX/*.py
+      - name: Install Qt for offscreen regression tests
+        run: python -m pip install PySide6-Essentials==6.8.3
+      - name: Test preview state and real Qt view events
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v

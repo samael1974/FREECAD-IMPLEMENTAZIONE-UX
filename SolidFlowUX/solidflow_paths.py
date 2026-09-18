@@ -9,6 +9,7 @@ rather than pretending to be a planar Sketcher sketch.
 from __future__ import annotations
 
 import math
+from solidflow_preview import PreviewTransaction
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -400,6 +401,7 @@ class SweepPathDialog(QtWidgets.QDialog):
         self.feature = None
         self._tx = False
         self._accepted = False
+        self._preview_tx = PreviewTransaction(self.doc, [profile, path], self.body)
         self.setWindowTitle("SolidFlow — Sweep su percorso elicoidale")
         self.resize(500, 330)
 
@@ -429,7 +431,7 @@ class SweepPathDialog(QtWidgets.QDialog):
             self._begin()
 
     def _begin(self):
-        self.doc.openTransaction("SolidFlow - Sweep path preview")
+        self._preview_tx.begin("SolidFlow - Sweep path preview")
         self._tx = True
         self._create_feature()
 
@@ -476,17 +478,8 @@ class SweepPathDialog(QtWidgets.QDialog):
             self.status.setText("Anteprima non valida: " + str(exc))
 
     def _rollback(self):
-        if self._tx:
-            try:
-                self.doc.abortTransaction()
-            except Exception:
-                try:
-                    if self.feature and self.doc.getObject(self.feature.Name):
-                        self.doc.removeObject(self.feature.Name)
-                    self.doc.recompute()
-                except Exception:
-                    pass
-            self._tx = False
+        self._preview_tx.rollback()
+        self._tx = False
         self.feature = None
 
     def accept(self):
@@ -495,15 +488,14 @@ class SweepPathDialog(QtWidgets.QDialog):
         try:
             self.feature.ViewObject.Transparency = 0
             self.doc.recompute()
+            if not self.feature.isValid() or self.feature.Shape.isNull() or not self.feature.Shape.isValid():
+                raise RuntimeError("Lo Sweep non produce una geometria valida")
+            self.profile.ViewObject.Visibility = False
+            self.path.ViewObject.Visibility = self.keep_path.isChecked()
             if self._tx:
-                self.doc.commitTransaction()
+                self._preview_tx.commit()
                 self._tx = False
             self._accepted = True
-            try:
-                self.profile.ViewObject.Visibility = False
-                self.path.ViewObject.Visibility = self.keep_path.isChecked()
-            except Exception:
-                pass
             Gui.Selection.clearSelection()
             Gui.Selection.addSelection(self.feature)
             super().accept()

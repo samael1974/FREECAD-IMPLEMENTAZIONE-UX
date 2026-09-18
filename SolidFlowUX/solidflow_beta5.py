@@ -456,11 +456,11 @@ class FilletDoctorDialog(QtWidgets.QDialog):
             doc.recompute()
             if not feature.isValid() or not _shape_ok(feature.Shape):
                 raise RuntimeError("FreeCAD non ha prodotto un raccordo Part Design valido")
-            doc.commitTransaction()
             try:
                 self.base.ViewObject.Visibility = False
             except Exception:
                 pass
+            doc.commitTransaction()
             Gui.Selection.clearSelection()
             Gui.Selection.addSelection(feature)
             self.accept()

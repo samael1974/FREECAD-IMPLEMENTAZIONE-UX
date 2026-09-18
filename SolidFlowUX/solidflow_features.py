@@ -11,6 +11,8 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 
+from solidflow_preview import PreviewTransaction, set_feature_sides
+
 PREF_PATH = "User parameter:BaseApp/Preferences/Mod/SolidFlowUX"
 
 
@@ -275,6 +277,8 @@ class FeaturePreviewDialog(QtWidgets.QDialog):
         self.feature = None
         self._tx = False
         self._accepted = False
+        self._closed = False
+        self._preview = PreviewTransaction(self.doc, [sketch], self.body)
         title = {"pad":"Estrusione solida", "pocket":"Taglio estruso", "revolution":"Rivoluzione solida"}[mode]
         self.setWindowTitle("SolidFlow - " + title)
         self.setModal(True)
@@ -307,10 +311,12 @@ class FeaturePreviewDialog(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, self._begin)
 
     def _begin(self):
+        if self._closed:
+            return
         if self.body is None:
             self.status.setText("Lo Sketch deve appartenere a un Body Part Design."); return
         try:
-            self.doc.openTransaction("SolidFlow preview"); self._tx = True
+            self._preview.begin("SolidFlow preview"); self._tx = True
             type_id = {"pad":"PartDesign::Pad", "pocket":"PartDesign::Pocket", "revolution":"PartDesign::Revolution"}[self.mode]
             self.feature = self.body.newObject(type_id, "SolidFlow" + self.mode.title())
             self.feature.Profile = (self.sketch, self.subs) if self.subs else self.sketch
@@ -328,8 +334,7 @@ class FeaturePreviewDialog(QtWidgets.QDialog):
             else:
                 self.feature.Angle = float(self.value.value())
                 self.feature.ReferenceAxis = (self.sketch, [self.axis.currentData()])
-            if hasattr(self.feature, "Reversed"): self.feature.Reversed = self.reversed.isChecked()
-            if hasattr(self.feature, "Midplane"): self.feature.Midplane = self.midplane.isChecked()
+            set_feature_sides(self.feature, self.midplane.isChecked(), self.reversed.isChecked())
             self.doc.recompute()
             valid = _shape_valid(self.feature)
             self.ok.setEnabled(valid)
@@ -338,13 +343,9 @@ class FeaturePreviewDialog(QtWidgets.QDialog):
             self.ok.setEnabled(False); self.status.setText("⚠ Anteprima non valida: %s" % exc)
 
     def _rollback(self):
-        if self._tx:
-            try: self.doc.abortTransaction()
-            except Exception:
-                try:
-                    if self.feature: self.doc.removeObject(self.feature.Name); self.doc.recompute()
-                except Exception: pass
-            self._tx = False
+        self._closed = True
+        self._preview.rollback()
+        self._tx = False
         self.feature = None
 
     def accept(self):
@@ -352,7 +353,9 @@ class FeaturePreviewDialog(QtWidgets.QDialog):
         try:
             self.feature.ViewObject.Transparency = 0
             self.doc.recompute()
-            if self._tx: self.doc.commitTransaction(); self._tx = False
+            if not _shape_valid(self.feature):
+                raise RuntimeError("La feature non produce una geometria valida")
+            if self._tx: self._preview.commit(); self._tx = False
             self._accepted = True
             super().accept()
         except Exception as exc:
@@ -425,19 +428,35 @@ class QuickEditFeatureDialog(QtWidgets.QDialog):
         box.accepted.connect(self.accept); box.rejected.connect(self.reject); self.value.valueChanged.connect(self.preview)
         self.doc.openTransaction("SolidFlow Quick Edit"); self._tx = True
     def preview(self, value):
-        try: setattr(self.feature, self.prop, float(value)); self.doc.recompute()
-        except Exception: pass
+        try:
+            setattr(self.feature, self.prop, float(value))
+            self.doc.recompute()
+        except Exception as exc:
+            App.Console.PrintWarning("SolidFlow modifica rapida: %s\n" % exc)
+
     def accept(self):
         try:
-            self.doc.recompute(); self.doc.commitTransaction(); self._tx=False
-        except Exception: pass
+            self.doc.recompute()
+            if not _shape_valid(self.feature):
+                raise RuntimeError("Geometria non valida: correggi il valore oppure premi Annulla")
+            self.doc.commitTransaction()
+            self._tx = False
+        except Exception as exc:
+            _warning("SolidFlow modifica rapida", str(exc))
+            return
         super().accept()
+
     def reject(self):
         if self._tx:
-            try: self.doc.abortTransaction()
-            except Exception: pass
-            self._tx=False
+            self.doc.abortTransaction()
+            self._tx = False
+            self.doc.recompute()
         super().reject()
+
+    def closeEvent(self, event):
+        if self._tx:
+            self.reject()
+        event.accept()
 
 
 def launch_edit_selected_feature():

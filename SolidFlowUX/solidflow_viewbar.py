@@ -157,6 +157,11 @@ class DisplayStyleBar(QtWidgets.QFrame):
         super().__init__(main_window)
         self.main_window = main_window
         self._host = None
+        self._watched = []
+        self._mdi = None
+        self._sync_timer = QtCore.QTimer(self)
+        self._sync_timer.setSingleShot(True)
+        self._sync_timer.timeout.connect(self.sync_position)
         self.setObjectName("SolidFlowDisplayStyleBar")
         self.setStyleSheet("""
             QFrame#SolidFlowDisplayStyleBar {
@@ -224,6 +229,46 @@ class DisplayStyleBar(QtWidgets.QFrame):
 
         self.adjustSize()
         self.hide()
+        self._watch_views()
+
+    def _schedule_sync(self, *_args):
+        if not self._sync_timer.isActive():
+            self._sync_timer.start(0)
+
+    def _watch_views(self):
+        mdi = self.main_window.findChild(QtWidgets.QMdiArea)
+        if mdi is not self._mdi:
+            if self._mdi is not None:
+                try:
+                    self._mdi.subWindowActivated.disconnect(self._schedule_sync)
+                except RuntimeError:
+                    pass
+            self._mdi = mdi
+            if mdi is not None:
+                mdi.subWindowActivated.connect(self._schedule_sync)
+        sub = mdi.activeSubWindow() if mdi else None
+        watched = [self.main_window, mdi, sub, sub.widget() if sub else None]
+        watched = [obj for obj in watched if obj is not None]
+        for obj in self._watched:
+            if obj not in watched:
+                try:
+                    obj.removeEventFilter(self)
+                except RuntimeError:
+                    pass  # The previous document's widget was already deleted.
+        for obj in watched:
+            if obj not in self._watched:
+                obj.installEventFilter(self)
+        self._watched = watched
+
+    def eventFilter(self, watched, event):
+        if event.type() in (
+            QtCore.QEvent.Resize, QtCore.QEvent.Move, QtCore.QEvent.Show,
+            QtCore.QEvent.Hide, QtCore.QEvent.WindowActivate,
+            QtCore.QEvent.WindowStateChange, QtCore.QEvent.ChildAdded,
+            QtCore.QEvent.ChildRemoved, QtCore.QEvent.LayoutRequest,
+        ):
+            self._schedule_sync()
+        return False
 
     def set_enabled(self, enabled):
         set_display_bar_enabled(enabled)
@@ -233,6 +278,7 @@ class DisplayStyleBar(QtWidgets.QFrame):
             self.sync_position()
 
     def sync_position(self):
+        self._watch_views()
         if not display_bar_enabled() or not Gui.ActiveDocument:
             self.hide()
             return
@@ -240,15 +286,13 @@ class DisplayStyleBar(QtWidgets.QFrame):
         if host is None:
             self.hide()
             return
-        if host is not self._host:
-            self._host = host
-            self.setParent(host)
-            self.setWindowFlags(QtCore.Qt.Widget)
-            self.show()
+        # Keep ownership with the main window. Closing a document must never
+        # delete the bar along with that document's MDI widget.
+        self._host = host
         self.adjustSize()
         x = max(4, host.width() - self.width() - 18)
         # Below the navigation cube, with enough room for the vertical stack.
         y = min(max(132, 8), max(8, host.height() - self.height() - 8))
-        self.move(x, y)
+        self.move(host.mapTo(self.main_window, QtCore.QPoint(x, y)))
         self.raise_()
         self.show()

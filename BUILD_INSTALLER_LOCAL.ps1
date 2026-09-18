@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipCheck
 )
 
@@ -40,6 +40,12 @@ if (Test-Path $dist) {
 } else {
     New-Item -ItemType Directory -Path $dist | Out-Null
 }
+
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+if (-not $python) { throw 'Python 3.11 richiesto per preparare il pacchetto tester.' }
+& $python.Source (Join-Path $root 'tools\build_tester_package.py')
+if ($LASTEXITCODE -ne 0) { throw 'Preparazione pacchetto tester fallita.' }
 
 Write-Host "[INFO] Compilatore: $iscc"
 & $iscc $iss
