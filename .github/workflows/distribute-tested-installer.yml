@@ -1,0 +1,86 @@
+name: Distribute verified tester installer
+
+on:
+  push:
+    branches: [fix/beta13-preview-stability]
+    paths: ['.github/workflows/distribute-tested-installer.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  distribute:
+    if: github.ref == 'refs/heads/fix/beta13-preview-stability'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download the already verified Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: SolidFlowUX-Windows-Installer
+          run-id: 35355287715
+          github-token: ${{ github.token }}
+          path: verified
+      - name: Verify provenance and EXE checksum
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root = Path('verified')
+          exe = root / 'SolidFlowUX-Setup-v0.4.0-beta.13-test.1.exe'
+          expected = dict(line.split('  ', 1)[::-1] for line in (root / 'SHA256SUMS.txt').read_text().splitlines())
+          digest = hashlib.sha256(exe.read_bytes()).hexdigest()
+          assert digest == expected[exe.name], 'EXE checksum mismatch'
+          provenance = (root / 'BUILD.txt').read_text(encoding='utf-8-sig')
+          assert '35355287715' in provenance, 'Wrong build provenance'
+          archive = root / 'SolidFlowUX-Tester-v0.4.0-beta.13-test.1.zip'
+          archive_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+          assert archive_digest == expected[archive.name], 'Macro package checksum mismatch'
+          Path('SHA256SUMS.txt').write_text(digest + '  ' + exe.name + '\n' + archive_digest + '  ' + archive.name + '\n')
+          PY
+      - name: Publish clearly labelled experimental download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          cat > release-notes.md <<'NOTES'
+          ## Scarica e installa SolidFlow UX su Windows
+          **Versione sperimentale per tester — richiede FreeCAD 1.1.x già installato.**
+
+          1. In **Assets** scarica **SolidFlowUX-Setup-v0.4.0-beta.13-test.1.exe**.
+          2. Chiudi tutte le finestre di FreeCAD e avvia il file scaricato.
+          3. Segui il setup. La cartella proposta è quella del profilo standard FreeCAD 1.1.
+          4. Riapri FreeCAD: trovi il menu **SolidFlow**. Premi **S** nella vista 3D.
+
+          Non servono Git, Python separato o un account GitHub per scaricare l'EXE.
+          **Non scaricare “Source code (zip)” o “Source code (tar.gz)” per installare.**
+          SolidFlow è un'estensione: non compare come programma CAD o nuovo workbench.
+
+          ### FreeCAD portabile o profilo personalizzato
+          Non confermare una cartella che non conosci. Usa invece il [pacchetto con macro offline](https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX/releases/download/v0.4.0-beta.13-test.1/SolidFlowUX-Tester-v0.4.0-beta.13-test.1.zip): la macro rileva il profilo dal FreeCAD aperto. Estrai lo ZIP, apri SolidFlowUX-Installa.FCMacro da FreeCAD e scegli Macro > Esegui macro.
+
+          ### Verifiche e limiti
+          Build Windows completata, installazione EXE in profilo temporaneo e confronto dei file superati. 21 test automatici passati. Restano le prove native di geometria e interfaccia FreeCAD: usare copie dei progetti.
+          Il setup conserva un backup della versione precedente nel profilo FreeCAD, fuori dalla cartella Mod.
+          L'EXE non è firmato digitalmente. Se Windows o l'antivirus lo bloccano, invia il messaggio esatto senza disattivare le protezioni.
+
+          ### Se SolidFlow non compare
+          Riavvia completamente FreeCAD. Nel menu Start di Windows apri **SolidFlow UX > Guida installazione e test**. La cartella installata contiene **SolidFlowUX-Diagnostica.FCMacro**, eseguibile da FreeCAD con File > Apri e Macro > Esegui macro anche se il menu SolidFlow manca.
+          Per assistenza allega versione FreeCAD, errore e rapporto diagnostico.
+
+          Sorgente: `4274102848bce958cd19438c05e117d597d6abf2`.
+          [Build verificata](https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX/actions/runs/35355287715) · [Modifiche e stato del lavoro](https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX/pull/2).
+          NOTES
+          gh release create v0.4.0-beta.13-test.1 \
+            --target 4274102848bce958cd19438c05e117d597d6abf2 \
+            --prerelease --latest=false \
+            --title 'SolidFlow UX beta.13-test.1 — Windows, versione di prova' \
+            --notes-file release-notes.md \
+            verified/SolidFlowUX-Setup-v0.4.0-beta.13-test.1.exe \
+            verified/SolidFlowUX-Tester-v0.4.0-beta.13-test.1.zip SHA256SUMS.txt
