@@ -1,0 +1,55 @@
+SolidFlow UX 0.4.0-beta.13 - Installazione e prova
+
+REQUISITO
+FreeCAD 1.1.x gia installato. SolidFlow UX e un componente aggiuntivo:
+non e un programma separato e non compare come nuovo workbench.
+Dopo il riavvio cerca il menu SolidFlow e premi S nella vista 3D.
+
+METODO CONSIGLIATO PER I TESTER (ANCHE FREECAD PORTABILE)
+1. Estrai tutto il pacchetto tester ZIP.
+2. Apri FreeCAD normalmente, con il profilo che usi.
+3. File > Apri: scegli SolidFlowUX-Installa.FCMacro.
+4. Nel menu Macro scegli Esegui macro (o il pulsante Esegui).
+5. Controlla la cartella mostrata e conferma l'installazione.
+6. Salva il tuo lavoro, chiudi tutte le finestre di FreeCAD e riaprilo.
+La macro contiene tutti i file: non scarica nulla e non richiede Python
+separato, PowerShell o privilegi di amministratore.
+Il percorso viene letto dal FreeCAD aperto, non indovinato.
+Se un'altra istanza di FreeCAD e aperta, chiudila prima di eseguire la macro.
+
+SETUP EXE WINDOWS (SE DISTRIBUITO CON IL PACCHETTO)
+Chiudi FreeCAD. Avvia il setup come utente normale.
+La cartella proposta e il profilo standard FreeCAD 1.1; controllala.
+Per un profilo personalizzato o portabile usa preferibilmente la macro.
+Un errore di backup interrompe il setup prima della sostituzione del runtime.
+Se Windows o l'antivirus bloccano il file, non disattivare le protezioni:
+allega il messaggio esatto alla segnalazione. Il pacchetto non e firmato.
+
+SE IL MENU NON COMPARE
+Esegui SolidFlowUX-Diagnostica.FCMacro con la stessa procedura File > Apri,
+Macro > Esegui macro. Funziona anche quando SolidFlow non si e avviato.
+Premi Copia rapporto e allegalo alla segnalazione insieme all'errore.
+Se il menu esiste: SolidFlow > Diagnostica SolidFlow.
+Allega: versione FreeCAD, Windows, metodo usato, testo/screenshot errore.
+Non basta scrivere "non si installa": indica se il setup non parte,
+si interrompe, oppure finisce ma manca il menu SolidFlow.
+Se sei in modalita sicura, gli addon possono essere disabilitati.
+
+BACKUP E RIPRISTINO
+Il backup viene conservato in SolidFlowUX_Backups nel profilo FreeCAD,
+fuori da Mod, con una cartella diversa per ogni aggiornamento.
+La macro ripristina la copia precedente se la sostituzione finale fallisce.
+Per tornare indietro dopo un'installazione riuscita: chiudi FreeCAD,
+sposta Mod/SolidFlowUX fuori da Mod e copia il backup scelto al suo posto.
+Non lasciare due copie di SolidFlow dentro Mod.
+Altri profili FreeCAD non vengono spostati o cancellati automaticamente.
+
+PROVA BREVE (5 MINUTI)
+1. Riavvio: il menu SolidFlow compare senza errori?
+2. Nuovo documento > Part Design > nuovo sketch: S apre gli strumenti?
+3. Disegna un rettangolo, seleziona una linea: compaiono le quote/vincoli?
+4. Chiudi lo sketch, estrudi; riapri la lavorazione e cambia la quota.
+5. Salva, chiudi e riapri il documento: geometria e operazioni sono presenti?
+Indica per ogni punto OK/ERRORE e allega la diagnostica.
+Questa beta corregge distribuzione/diagnostica e registrazione tardiva dei
+comandi Sketcher. Non certifica tutte le funzioni CAD o tutte le versioni Qt.
