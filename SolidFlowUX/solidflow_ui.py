@@ -585,7 +585,7 @@ class SolidFlowController(QtCore.QObject):
         self.mini_action = None
         self.references_action = None
         self.view_timer = QtCore.QTimer(self)
-        self.view_timer.setInterval(450)
+        self.view_timer.setInterval(2000)  # Recovery only; view events drive placement.
         self.view_timer.timeout.connect(self.viewbar.sync_position)
         self.selection_timer = QtCore.QTimer(self)
         self.selection_timer.setSingleShot(True)

@@ -17,3 +17,4 @@ solidflow_fillet.py
 solidflow_paths.py
 solidflow_workflows.py
 solidflow_beta12.py
+solidflow_preview.py
