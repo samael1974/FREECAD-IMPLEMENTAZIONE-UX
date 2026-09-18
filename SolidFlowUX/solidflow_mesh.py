@@ -320,7 +320,7 @@ class MeshDoctorDialog(QtWidgets.QDialog):
 
     def update_preview(self):
         if self.preview is None:
-            return
+            return False
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
             repaired, log = repaired_copy(self.source.Mesh, self.options())
@@ -331,15 +331,18 @@ class MeshDoctorDialog(QtWidgets.QDialog):
             for method, ok, detail in log:
                 lines.append(("✓ " if ok else "✗ ") + method + ("" if ok else ": " + detail))
             self.result.setPlainText("\n".join(lines))
+            return True
         except Exception as exc:
             self.result.setPlainText("Riparazione preview fallita: " + str(exc))
+            return False
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
 
     def accept_repair(self):
         if self.preview is None:
             return
-        self.update_preview()
+        if not self.update_preview():
+            return
         try:
             self.preview.Label = self.source.Label + " — Repaired"
             self.preview.ViewObject.Transparency = 0
@@ -359,7 +362,8 @@ class MeshDoctorDialog(QtWidgets.QDialog):
         if Part is None or self.preview is None:
             _message("SolidFlow Mesh Doctor", "Modulo Part non disponibile.", QtWidgets.QMessageBox.Warning)
             return
-        self.update_preview()
+        if not self.update_preview():
+            return
         try:
             mesh = self.preview.Mesh
             if not mesh.isSolid():

@@ -238,6 +238,35 @@ class ViewbarTests(unittest.TestCase):
         self.assertFalse(doc.sketch.ViewObject.Visibility)
         self.assertFalse(dialog._tx)
 
+    def test_quick_edit_rejects_invalid_geometry(self):
+        import solidflow_features as features
+        doc = Document()
+        dialog = features.QuickEditFeatureDialog.__new__(features.QuickEditFeatureDialog)
+        QtWidgets.QDialog.__init__(dialog, self.main)
+        dialog.doc, dialog._tx = doc, True
+        dialog.feature = NS(isValid=lambda: False)
+        old = features._warning
+        warnings = []
+        features._warning = lambda *args: warnings.append(args)
+        try:
+            dialog.accept()
+            self.assertNotIn('commit', doc.calls)
+            self.assertTrue(dialog._tx)
+            self.assertEqual(len(warnings), 1)
+        finally:
+            features._warning = old
+
+    def test_mesh_preview_failure_blocks_commit(self):
+        import solidflow_mesh as mesh
+        dialog = mesh.MeshDoctorDialog.__new__(mesh.MeshDoctorDialog)
+        QtWidgets.QDialog.__init__(dialog, self.main)
+        dialog.preview = NS()
+        dialog.update_preview = lambda: False
+        doc = Document()
+        dialog.doc = doc
+        dialog.accept_repair()
+        self.assertNotIn('commit', doc.calls)
+
 
 if __name__ == '__main__':
     unittest.main()

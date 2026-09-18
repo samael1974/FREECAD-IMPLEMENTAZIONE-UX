@@ -428,19 +428,35 @@ class QuickEditFeatureDialog(QtWidgets.QDialog):
         box.accepted.connect(self.accept); box.rejected.connect(self.reject); self.value.valueChanged.connect(self.preview)
         self.doc.openTransaction("SolidFlow Quick Edit"); self._tx = True
     def preview(self, value):
-        try: setattr(self.feature, self.prop, float(value)); self.doc.recompute()
-        except Exception: pass
+        try:
+            setattr(self.feature, self.prop, float(value))
+            self.doc.recompute()
+        except Exception as exc:
+            App.Console.PrintWarning("SolidFlow modifica rapida: %s\n" % exc)
+
     def accept(self):
         try:
-            self.doc.recompute(); self.doc.commitTransaction(); self._tx=False
-        except Exception: pass
+            self.doc.recompute()
+            if not _shape_valid(self.feature):
+                raise RuntimeError("Geometria non valida: correggi il valore oppure premi Annulla")
+            self.doc.commitTransaction()
+            self._tx = False
+        except Exception as exc:
+            _warning("SolidFlow modifica rapida", str(exc))
+            return
         super().accept()
+
     def reject(self):
         if self._tx:
-            try: self.doc.abortTransaction()
-            except Exception: pass
-            self._tx=False
+            self.doc.abortTransaction()
+            self._tx = False
+            self.doc.recompute()
         super().reject()
+
+    def closeEvent(self, event):
+        if self._tx:
+            self.reject()
+        event.accept()
 
 
 def launch_edit_selected_feature():
