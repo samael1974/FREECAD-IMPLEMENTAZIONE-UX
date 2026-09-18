@@ -5,7 +5,7 @@ on:
   pull_request:
     paths: ['SolidFlowUX/**', 'installer/**', 'tools/**', 'tests/**', 'CHECK_SOURCE.ps1', 'BUILD_INSTALLER_LOCAL.ps1', '.github/workflows/build-windows-installer.yml']
   push:
-    branches: [main]
+    branches: [main, fix/beta13-preview-stability]
     paths: ['SolidFlowUX/**', 'installer/**', 'tools/**', 'tests/**', 'CHECK_SOURCE.ps1', 'BUILD_INSTALLER_LOCAL.ps1', '.github/workflows/build-windows-installer.yml']
     tags: ['v*']
 
@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   build-installer:
+    if: github.event_name != 'pull_request' || github.head_ref != 'fix/beta13-preview-stability'
     runs-on: windows-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -109,3 +110,28 @@ jobs:
           prerelease: true
           generate_release_notes: true
           files: dist/*
+
+  publish-assisted-line-test:
+    needs: build-installer
+    if: github.event_name == 'push' && github.ref == 'refs/heads/fix/beta13-preview-stability' && needs.build-installer.outputs.version == '0.4.0-beta.13-test.2'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: SolidFlowUX-Windows-Installer
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.4.0-beta.13-test.2
+          target_commitish: ${{ github.sha }}
+          name: SolidFlow UX beta.13-test.2 — Linea assistita
+          prerelease: true
+          make_latest: false
+          body_path: docs/RELEASE_TEST2.md
+          files: |
+            dist/SolidFlowUX-Setup-v0.4.0-beta.13-test.2.exe
+            dist/SolidFlowUX-Tester-v0.4.0-beta.13-test.2.zip
+            dist/SHA256SUMS.txt

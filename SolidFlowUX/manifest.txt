@@ -19,3 +19,5 @@ solidflow_workflows.py
 solidflow_beta12.py
 solidflow_preview.py
 solidflow_diagnostics.py
+solidflow_inference.py
+solidflow_assisted_line.py

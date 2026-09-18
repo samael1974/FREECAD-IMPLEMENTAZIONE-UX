@@ -1,4 +1,4 @@
-SolidFlow UX 0.4.0-beta.13-test.1 - Installazione e prova
+SolidFlow UX 0.4.0-beta.13-test.2 - Installazione e prova
 
 BUILD SPERIMENTALE PER TEST
 Include correzioni installer e anteprime. Validazione nativa FreeCAD ancora
@@ -64,3 +64,20 @@ TEST STABILITA AGGIUNTIVI
 8. Conferma un raccordo e poi Undo: torna visibile la feature precedente?
 9. Cambia documento, ridimensiona e chiudi una vista: la barra resta disponibile?
 10. Sweep e conversione mesh: dopo conferma e Undo torna la visibilita iniziale?
+
+LINEA ASSISTITA - NOVITA TEST.2
+Apri uno Sketch in modifica. Menu SolidFlow > Sketch intelligente >
+Linea assistita - guide tratteggiate. E un comando dedicato: non cambia
+il comando Linea nativo. Il comando termina l'eventuale disegno in corso
+e riapre lo Sketch mantenendo le geometrie gia confermate.
+Primo clic: punto iniziale. Muovi il mouse vicino al prolungamento di una
+linea esistente, oppure quasi parallelo/perpendicolare a una linea obliqua.
+La guida arancione tratteggiata e il pannello indicano il suggerimento.
+Clic: crea il segmento e conferma il vincolo proposto se la casella e attiva.
+Shift+clic: punto libero, senza snap o vincoli proposti.
+Esc, clic destro o pulsante Termina: rimuove le guide.
+Undo annulla un segmento con i suoi vincoli. I vincoli ridondanti vengono
+scartati se il solver li segnala. Non vengono rimossi vincoli preesistenti.
+Prima versione: solo segmenti interni allo Sketch; esclusi archi e
+geometria esterna. Vista ortografica consigliata, guardando lo Sketch
+frontalmente. Verifica nativa FreeCAD ancora da completare.

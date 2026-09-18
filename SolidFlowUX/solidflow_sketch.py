@@ -285,6 +285,12 @@ class SketchUXController(QtCore.QObject):
             marker.setObjectName("SolidFlowSketchCoreMarker")
             target.addSeparator()
             submenu = target.addMenu("Sketch intelligente")
+            assisted = submenu.addAction("Linea assistita — guide tratteggiate…")
+            assisted.setToolTip("Prolungamenti, parallele e perpendicolari; clic per confermare, Shift per ignorare")
+            def launch_assisted():
+                import solidflow_assisted_line
+                solidflow_assisted_line.launch()
+            assisted.triggered.connect(launch_assisted)
             settings = submenu.addAction("Impostazioni Smart Sketch…")
             settings.triggered.connect(smart.show_smart_sketch_settings)
             theme = submenu.addAction("Tema SolidWorks-like")

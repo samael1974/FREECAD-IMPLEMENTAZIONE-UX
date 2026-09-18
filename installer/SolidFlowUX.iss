@@ -2,7 +2,7 @@
 ; Built with Inno Setup 6. No administrator privileges required.
 
 #define MyAppName "SolidFlow UX"
-#define MyAppVersion "0.4.0-beta.13-test.1"
+#define MyAppVersion "0.4.0-beta.13-test.2"
 #define MyAppPublisher "SolidFlow UX Project"
 #define MyAppURL "https://github.com/samael1974/FREECAD-IMPLEMENTAZIONE-UX"
 
@@ -42,6 +42,8 @@ Source: "..\SolidFlowUX\InitGui.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_ui.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_features.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_preview.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_inference.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SolidFlowUX\solidflow_assisted_line.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_smart.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_sketch.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SolidFlowUX\solidflow_import.py"; DestDir: "{app}"; Flags: ignoreversion

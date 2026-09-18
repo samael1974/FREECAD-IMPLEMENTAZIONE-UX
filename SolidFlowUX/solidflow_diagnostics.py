@@ -5,7 +5,7 @@ from pathlib import Path
 import platform
 import sys
 
-VERSION = "0.4.0-beta.13"
+VERSION = "0.4.0-beta.13-test.2"
 
 
 def _clean(value):
